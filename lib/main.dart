@@ -409,7 +409,7 @@ class EventListenerScreen extends StatefulWidget {
 
 class _EventListenerScreenState extends State<EventListenerScreen> {
   bool _isListening = false;
-  List<ContractEvent> _events = [];
+  final List<ContractEvent> _events = [];
   StreamSubscription? _eventSubscription;
 
   @override
