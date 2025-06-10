@@ -1,187 +1,124 @@
-import 'package:web3dart/web3dart.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:wallet/wallet.dart' show EthereumAddress;
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:web3dart/web3dart.dart';
+
+import 'package:wallet/wallet.dart' show EthereumAddress;
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/event.dart';
 
+/// Listens to on‑chain events emitted by a single smart‑contract and converts
+/// them into strongly‑typed [Event] domain objects.
+///
+/// Usage:
+/// ```dart
+/// final service = EthereumEventService(config);
+/// service.listen().listen(print);
+/// ```
 class EthereumEventService {
-  final EthereumConfig config;
-  late Web3Client _client;
-  late DeployedContract _contract;
+  final EthereumConfig _config;
+  final http.Client _httpClient;
+  late final Web3Client _client;
+  late final DeployedContract _contract;
 
-  EthereumEventService(this.config) {
-    _initializeClient();
+  /// Optionally inject an existing [http.Client] – useful for testing or
+  /// sharing a single client instance across services.
+  EthereumEventService(this._config, [http.Client? httpClient])
+    : _httpClient = httpClient ?? http.Client() {
+    _init();
   }
 
-  void _initializeClient() {
-    String rpcUrl = config.rpcEndpoint;
-    if (config.apiKey != null && config.apiKey!.isNotEmpty) {
-      if (rpcUrl.contains('?')) {
-        rpcUrl += '&apikey=${config.apiKey}';
-      } else {
-        rpcUrl += '?apikey=${config.apiKey}';
-      }
-    }
+  void _init() {
+    final rpcUrl = _appendApiKey(_config.rpcEndpoint, _config.apiKey);
+    _client = Web3Client(rpcUrl, _httpClient);
 
-    _client = Web3Client(rpcUrl, http.Client());
-
-    final abi = jsonDecode(config.contractAbi);
+    final abi = jsonDecode(_config.contractAbi) as List<dynamic>;
     _contract = DeployedContract(
       ContractAbi.fromJson(jsonEncode(abi), 'Contract'),
-      EthereumAddress.fromHex(config.contractAddress),
+      EthereumAddress.fromHex(_config.contractAddress),
     );
   }
 
-  Stream<Event> listenToEvents() async* {
-    // Create separate streams for each event and merge them
-    final eventStreams = config.eventsToListen.map((eventName) {
-      final contractEvent = _contract.event(eventName);
-      return _client.events(
-        FilterOptions.events(contract: _contract, event: contractEvent),
-      );
-    }).toList();
-
-    // Merge all event streams into one
-    final StreamController<FilterEvent> controller =
-        StreamController<FilterEvent>();
-    final subscriptions = <StreamSubscription>[];
-
-    for (final stream in eventStreams) {
-      final subscription = stream.listen(
-        (event) => controller.add(event),
-        onError: (error) => controller.addError(error),
-      );
-      subscriptions.add(subscription);
-    }
-
-    // Clean up subscriptions when the stream is cancelled
-    controller.onCancel = () async {
-      for (final subscription in subscriptions) {
-        await subscription.cancel();
-      }
-      await controller.close();
-    };
-
-    await for (final filterEvent in controller.stream) {
-      // Parse the event data manually since the API structure changed
-      final eventData = <String, dynamic>{};
-      final eventName = _getEventNameFromTopics(filterEvent.topics);
-
-      if (eventName != null) {
-        // Try to decode the event data
-        try {
-          final contractEvent = _contract.event(eventName);
-
-          // Convert nullable string list to non-nullable
-          final topics =
-              filterEvent.topics?.whereType<String>().toList() ?? <String>[];
-          final data = filterEvent.data ?? '';
-
-          // Decode event data
-          final decodedData = contractEvent.decodeResults(topics, data);
-
-          // Get event parameters from ABI
-          final eventAbi = _getEventAbiFromName(eventName);
-          if (eventAbi != null && eventAbi['inputs'] != null) {
-            final inputs = eventAbi['inputs'] as List;
-            for (int i = 0; i < inputs.length && i < decodedData.length; i++) {
-              final input = inputs[i] as Map<String, dynamic>;
-              eventData[input['name'] ?? 'param_$i'] = decodedData[i]
-                  .toString();
-            }
-          } else {
-            // Fallback: use indexed parameters
-            for (int i = 0; i < decodedData.length; i++) {
-              eventData['param_$i'] = decodedData[i].toString();
-            }
-          }
-        } catch (e) {
-          // Fallback: use raw data
-          eventData['rawData'] = filterEvent.data ?? '';
-          eventData['topics'] =
-              filterEvent.topics?.whereType<String>().toList() ?? [];
-          eventData['error'] = e.toString();
-        }
-
-        yield Event(
-          eventName: eventName,
-          transactionHash: filterEvent.transactionHash ?? 'unknown',
-          blockNumber: _getBlockNumber(filterEvent),
-          data: eventData,
-        );
-      }
-    }
+  /// Adds the `apikey` query parameter when an api‑key is configured.
+  String _appendApiKey(String url, String? apiKey) {
+    if (apiKey == null || apiKey.isEmpty) return url;
+    final sep = url.contains('?') ? '&' : '?';
+    return '$url${sep}apikey=$apiKey';
   }
 
-  String? _getEventNameFromTopics(List<String?>? topics) {
-    if (topics == null || topics.isEmpty) return null;
+  /// Returns a broadcast [Stream] with decoded contract events.
+  Stream<Event> listen() {
+    final controller = StreamController<Event>.broadcast(onCancel: dispose);
 
-    final eventSignature = topics[0];
-    if (eventSignature == null) return null;
+    // Create a subscription per configured event.
+    for (final name in _config.eventsToListen) {
+      final ev = _contract.event(name);
 
-    // Try to match the event signature with our configured events
-    for (final eventName in config.eventsToListen) {
-      try {
-        _contract.event(eventName);
-        // Get the event signature hash
-        final eventAbi = _getEventAbiFromName(eventName);
-        if (eventAbi != null) {
-          // Simple comparison - in a real implementation you'd calculate the keccak256 hash
-          return eventName;
-        }
-      } catch (e) {
-        continue;
-      }
+      _client
+          .events(FilterOptions.events(contract: _contract, event: ev))
+          .listen(
+            (filterEvent) => controller.add(_decode(name, filterEvent)),
+            onError: controller.addError,
+          );
     }
 
-    return config.eventsToListen.isNotEmpty
-        ? config.eventsToListen.first
-        : 'UnknownEvent';
+    return controller.stream;
   }
 
-  Map<String, dynamic>? _getEventAbiFromName(String eventName) {
-    try {
-      final abi = jsonDecode(config.contractAbi) as List;
-      return abi.firstWhere(
-            (item) => item['type'] == 'event' && item['name'] == eventName,
-            orElse: () => null,
-          )
-          as Map<String, dynamic>?;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  int _getBlockNumber(FilterEvent filterEvent) {
-    // Try different ways to get block number based on available properties
-    try {
-      // Check if blockNumber property exists
-      final dynamic blockNum = (filterEvent as dynamic).blockNumber;
-      if (blockNum != null) {
-        return blockNum is int
-            ? blockNum
-            : int.tryParse(blockNum.toString()) ?? 0;
-      }
-    } catch (e) {
-      // Property doesn't exist or access failed
-    }
+  /// Decodes a single [FilterEvent] into the domain‑specific [Event] class.
+  Event _decode(String name, FilterEvent fe) {
+    final data = <String, dynamic>{};
 
     try {
-      // Check if block property exists
-      final dynamic block = (filterEvent as dynamic).block;
-      if (block != null) {
-        return block is int ? block : int.tryParse(block.toString()) ?? 0;
+      final ev = _contract.event(name);
+      final topics =
+          fe.topics?.whereType<String>().toList(growable: false) ?? [];
+      final decoded = ev.decodeResults(topics, fe.data ?? '');
+
+      final inputs = _eventAbi(name)?['inputs'] as List<dynamic>? ?? [];
+      for (var i = 0; i < decoded.length; i++) {
+        final paramName = (i < inputs.length)
+            ? (inputs[i] as Map<String, dynamic>)['name'] as String? ??
+                  'param_$i'
+            : 'param_$i';
+        data[paramName] = decoded[i].toString();
       }
     } catch (e) {
-      // Property doesn't exist or access failed
+      data
+        ..['rawData'] = fe.data
+        ..['topics'] = fe.topics
+        ..['error'] = e.toString();
     }
 
-    return 0; // Fallback
+    return Event(
+      eventName: name,
+      transactionHash: fe.transactionHash ?? 'unknown',
+      blockNumber: _blockNumber(fe),
+      data: data,
+    );
   }
 
+  Map<String, dynamic>? _eventAbi(String name) {
+    final abi = jsonDecode(_config.contractAbi) as List<dynamic>;
+    return abi.cast<Map<String, dynamic>>().firstWhere(
+      (e) => e['type'] == 'event' && e['name'] == name,
+      orElse: () => <String, dynamic>{},
+    );
+  }
+
+  int _blockNumber(FilterEvent fe) {
+    try {
+      final n = (fe as dynamic).blockNumber ?? (fe as dynamic).block;
+      return n is int ? n : int.tryParse(n.toString()) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Frees network resources.
   void dispose() {
     _client.dispose();
+    _httpClient.close();
   }
 }
