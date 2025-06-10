@@ -8,14 +8,6 @@ import 'package:wallet/wallet.dart' show EthereumAddress;
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/event.dart';
 
-/// Listens to on‑chain events emitted by a single smart‑contract and converts
-/// them into strongly‑typed [Event] domain objects.
-///
-/// Usage:
-/// ```dart
-/// final service = EthereumEventService(config);
-/// service.listen().listen(print);
-/// ```
 class EthereumEventService {
   final EthereumConfig _config;
   final http.Client _httpClient;

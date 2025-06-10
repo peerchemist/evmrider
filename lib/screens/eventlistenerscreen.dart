@@ -9,7 +9,7 @@ class EventListenerScreen extends StatefulWidget {
   const EventListenerScreen({super.key, this.eventService});
 
   @override
-  _EventListenerScreenState createState() => _EventListenerScreenState();
+  State<EventListenerScreen> createState() => _EventListenerScreenState();
 }
 
 class _EventListenerScreenState extends State<EventListenerScreen> {
@@ -179,7 +179,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
 
   Future<void> _startListening() async {
     try {
-      _eventSubscription = widget.eventService!.listenToEvents().listen(
+      _eventSubscription = widget.eventService!.listen().listen(
         (event) {
           setState(() {
             _events.insert(0, event);
