@@ -1,26 +1,8 @@
-import 'dart:async';
+import 'package:evmrider/models/config.dart';
 import 'package:flutter/material.dart';
 import 'package:evmrider/services/eventlistener.dart';
-import 'package:evmrider/models/config.dart';
-import 'package:evmrider/screens/eventlistenerscreen.dart';
 import 'package:evmrider/screens/setup.dart';
-
-void main() {
-  runApp(EthereumEventListenerApp());
-}
-
-class EthereumEventListenerApp extends StatelessWidget {
-  const EthereumEventListenerApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Ethereum Event Listener',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: MainScreen(),
-    );
-  }
-}
+import 'package:evmrider/screens/eventlistenerscreen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
