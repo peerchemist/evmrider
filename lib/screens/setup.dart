@@ -9,7 +9,7 @@ class SetupScreen extends StatefulWidget {
   const SetupScreen({super.key, this.config, required this.onConfigUpdated});
 
   @override
-  _SetupScreenState createState() => _SetupScreenState();
+  State<SetupScreen> createState() => _SetupScreenState();
 }
 
 class _SetupScreenState extends State<SetupScreen> {
