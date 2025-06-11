@@ -83,8 +83,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         controller: _rpcController,
                         decoration: InputDecoration(
                           labelText: 'RPC Endpoint *',
-                          hintText:
-                              'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
+                          hintText: 'https://eth.llamarpc.com',
                           border: OutlineInputBorder(),
                         ),
                         validator: (value) {
