@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import 'package:web3dart/web3dart.dart';
 import 'package:wallet/wallet.dart' show EthereumAddress;
@@ -17,10 +16,8 @@ class EthereumEventService {
   late final Web3Client _client;
   late final DeployedContract _contract;
 
-  final _filterSubs = <StreamSubscription<dynamic>>[];
-  final _pollTimers = <Timer>[];
-
-  late final bool _useEthFilter;
+  /// Keep polling timers so we can cancel them on `dispose()`.
+  final _timers = <Timer>[];
 
   EthereumEventService(this._config, [http.Client? httpClient])
     : _httpClient = httpClient ?? http.Client() {
@@ -30,19 +27,18 @@ class EthereumEventService {
   // ─────────────────────────────────────────────────── init ──
   void _init() {
     final rpcUrl = _appendApiKey(_config.rpcEndpoint, _config.apiKey);
-    _useEthFilter = rpcUrl.startsWith('ws');
 
-    _client = _useEthFilter
-        ? Web3Client(
-            rpcUrl,
-            _httpClient,
-            // `WebSocketChannel.connect()` picks the right implementation
-            // for mobile / desktop / Flutter web automatically.
-            socketConnector: () => WebSocketChannel.connect(
-              Uri.parse(rpcUrl),
-            ).cast<String>(), // make sure the channel is <String>
-          )
-        : Web3Client(rpcUrl, _httpClient);
+    // Only http / https are accepted
+    final uri = Uri.parse(rpcUrl);
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      throw ArgumentError.value(
+        _config.rpcEndpoint,
+        'rpcEndpoint',
+        'Must start with http:// or https://',
+      );
+    }
+
+    _client = Web3Client(rpcUrl, _httpClient);
 
     _contract = DeployedContract(
       ContractAbi.fromJson(_config.contractAbi, 'Contract'),
@@ -56,55 +52,39 @@ class EthereumEventService {
     return '$url${sep}apikey=$apiKey';
   }
 
+  // ───────────────────────────────────────── listen ──
   Stream<Event> listen({Duration pollInterval = _defaultPollInterval}) {
     final controller = StreamController<Event>.broadcast(
       onCancel: () async {
-        for (final s in _filterSubs) {
-          await s.cancel();
-        }
-        for (final t in _pollTimers) {
+        for (final t in _timers) {
           t.cancel();
         }
-        _filterSubs.clear();
-        _pollTimers.clear();
-        dispose(); // free sockets + HTTP client
+        _timers.clear();
+        dispose();
       },
     );
 
     for (final name in _config.eventsToListen) {
-      final ev = _contract.event(name);
-
-      if (_useEthFilter) {
-        // WebSocket → real-time filters
-        final sub = _client
-            .events(FilterOptions.events(contract: _contract, event: ev))
-            .listen(
-              (fe) => controller.add(_decode(name, fe)),
-              onError: controller.addError,
-            );
-        _filterSubs.add(sub);
-      } else {
-        // HTTP → start polling loop
-        _startPolling(name, ev, pollInterval, controller);
-      }
+      _startPolling(name, pollInterval, controller);
     }
 
     return controller.stream;
   }
 
+  // ───────────────────────────────────── polling loop ──
   void _startPolling(
-    String name,
-    ContractEvent ev,
+    String eventName,
     Duration interval,
     StreamController<Event> out,
   ) {
-    int fromBlock = 0;
+    final ev = _contract.event(eventName);
+    int fromBlock = 22681184;
 
     final timer = Timer.periodic(interval, (t) async {
       try {
         final latest = await _client.getBlockNumber();
         if (fromBlock == 0) fromBlock = latest; // first tick
-        if (latest < fromBlock) return;
+        if (latest < fromBlock) return; // nothing new yet
 
         final logs = await _client.getLogs(
           FilterOptions.events(
@@ -116,7 +96,7 @@ class EthereumEventService {
         );
 
         for (final fe in logs) {
-          out.add(_decode(name, fe));
+          out.add(_decode(eventName, fe));
         }
         fromBlock = latest + 1;
       } catch (e) {
@@ -124,9 +104,10 @@ class EthereumEventService {
       }
     });
 
-    _pollTimers.add(timer);
+    _timers.add(timer);
   }
 
+  // ───────────────────────────────────────── decode ──
   Event _decode(String name, FilterEvent fe) {
     final data = <String, dynamic>{};
 
@@ -175,7 +156,7 @@ class EthereumEventService {
     }
   }
 
-  // ─────────────────────────────────────────── cleanup ──
+  // ───────────────────────────────────── cleanup ──
   void dispose() {
     _client.dispose();
     _httpClient.close();

@@ -17,6 +17,9 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   final List<Event> _events = [];
   StreamSubscription? _eventSubscription;
 
+  static const _intervalOptions = <int>[5, 10, 30, 60, 300, 600];
+  int _pollIntervalSeconds = _intervalOptions.first; // 5-second default
+
   @override
   Widget build(BuildContext context) {
     if (widget.eventService == null) {
@@ -65,13 +68,40 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
                       : Icons.radio_button_unchecked,
                   color: _isListening ? Colors.green : Colors.grey,
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
                   _isListening ? 'Listening for events...' : 'Not listening',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: _isListening ? Colors.green[800] : Colors.grey[800],
                   ),
+                ),
+                const Spacer(), // push the drop-down to the right
+                DropdownButton<int>(
+                  value: _pollIntervalSeconds,
+                  icon: const Icon(Icons.timer, size: 20),
+                  items: _intervalOptions
+                      .map(
+                        (s) => DropdownMenuItem<int>(
+                          value: s,
+                          child: Text('${s}s'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) async {
+                    // ── linter-friendly braces ──
+                    if (value == null || value == _pollIntervalSeconds) {
+                      return;
+                    }
+
+                    setState(() => _pollIntervalSeconds = value);
+
+                    // If we’re already listening, restart with the new interval.
+                    if (_isListening) {
+                      await _stopListening();
+                      await _startListening();
+                    }
+                  },
                 ),
               ],
             ),
