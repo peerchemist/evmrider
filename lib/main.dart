@@ -41,13 +41,21 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _loadConfig() async {
-    final config = await EthereumConfig.load();
-    setState(() {
-      _config = config;
-      if (_config != null && _config!.isValid()) {
-        _eventService = EthereumEventService(_config!);
-      }
-    });
+    final cfg = await EthereumConfig.load();
+
+    // Bail out if this State object is gone (e.g., hot‐restart)
+    if (!mounted) return;
+
+    if (cfg != null && cfg.isValid()) {
+      // Dispose a previous service before replacing it
+      _eventService?.dispose();
+      setState(() {
+        _config = cfg;
+        _eventService = EthereumEventService(cfg);
+      });
+    } else {
+      setState(() => _config = null);
+    }
   }
 
   void _onConfigUpdated(EthereumConfig config) {
