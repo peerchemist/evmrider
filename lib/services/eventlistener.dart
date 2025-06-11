@@ -14,8 +14,8 @@ class EthereumEventService {
   late final Web3Client _client;
   late final DeployedContract _contract;
 
-  /// Optionally inject an existing [http.Client] – useful for testing or
-  /// sharing a single client instance across services.
+  final _eventSubs = <StreamSubscription<dynamic>>[];
+
   EthereumEventService(this._config, [http.Client? httpClient])
     : _httpClient = httpClient ?? http.Client() {
     _init();
@@ -39,20 +39,29 @@ class EthereumEventService {
     return '$url${sep}apikey=$apiKey';
   }
 
-  /// Returns a broadcast [Stream] with decoded contract events.
   Stream<Event> listen() {
-    final controller = StreamController<Event>.broadcast(onCancel: dispose);
+    final controller = StreamController<Event>.broadcast(
+      onCancel: () async {
+        for (final sub in _eventSubs) {
+          await sub.cancel();
+        }
+        _eventSubs.clear();
+        dispose(); // closes Web3Client + http client
+      },
+    );
 
-    // Create a subscription per configured event.
     for (final name in _config.eventsToListen) {
       final ev = _contract.event(name);
 
-      _client
+      // 🔹 Save the subscription we get back from web3dart
+      final sub = _client
           .events(FilterOptions.events(contract: _contract, event: ev))
           .listen(
             (filterEvent) => controller.add(_decode(name, filterEvent)),
             onError: controller.addError,
           );
+
+      _eventSubs.add(sub);
     }
 
     return controller.stream;
