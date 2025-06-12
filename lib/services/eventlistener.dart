@@ -78,7 +78,7 @@ class EthereumEventService {
     StreamController<Event> out,
   ) {
     final ev = _contract.event(eventName);
-    int fromBlock = 22681184;
+    int fromBlock = 22687425;
 
     final timer = Timer.periodic(interval, (t) async {
       try {
@@ -148,15 +148,37 @@ class EthereumEventService {
   }
 
   int _blockNumber(FilterEvent fe) {
+    dynamic raw;
+
     try {
-      final n = (fe as dynamic).blockNumber ?? (fe as dynamic).block;
-      return n is int ? n : int.tryParse(n.toString()) ?? 0;
-    } catch (_) {
-      return 0;
+      raw = (fe as dynamic).blockNumber; // some forks
+    } catch (_) {}
+    if (raw == null) {
+      try {
+        raw = (fe as dynamic).block; // web3dart ≥2.4.1
+      } catch (_) {}
     }
+    if (raw == null) {
+      try {
+        raw = (fe as dynamic).blockNum; // web3dart 2.0 – 2.4.0
+      } catch (_) {}
+    }
+
+    // Convert to int.
+    if (raw is int) return raw;
+    if (raw is BigInt) return raw.toInt();
+
+    if (raw is String) {
+      final s = raw.trim().toLowerCase();
+      return int.parse(
+        s.startsWith('0x') ? s.substring(2) : s,
+        radix: s.startsWith('0x') ? 16 : 10,
+      );
+    }
+
+    return 0; // unknown / absent
   }
 
-  // ───────────────────────────────────── cleanup ──
   void dispose() {
     _client.dispose();
     _httpClient.close();
