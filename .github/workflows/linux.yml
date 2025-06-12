@@ -1,0 +1,40 @@
+# Build Linux (x64) on every push
+name: Build Linux (x64)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Linux desktop target
+        run: flutter config --enable-linux-desktop
+
+      - name: Fetch packages
+        run: flutter pub get
+
+      - name: Build Linux release
+        run: flutter build linux --release
+
+      # Bundle output lives in build/linux/x64/release/bundle
+      - name: Create ZIP
+        run: |
+          cd build/linux/x64/release/bundle
+          zip -r ../../../evmrider-linux-x64.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evmrider-linux-x64
+          path: build/linux/x64/release/evmrider-linux-x64.zip

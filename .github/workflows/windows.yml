@@ -1,0 +1,41 @@
+# Build Windows (x64) on every push
+name: Build Windows (x64)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop target
+        run: flutter config --enable-windows-desktop
+
+      - name: Fetch packages
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      # Bundle output lives in build/windows/runner/Release
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build/windows/runner/Release/*" `
+                           -DestinationPath "build/evmrider-win-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evmrider-win-x64
+          path: build/evmrider-win-x64.zip

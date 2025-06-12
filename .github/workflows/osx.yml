@@ -1,0 +1,41 @@
+name: Build macOS (ARM) on every push
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-macos-arm:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable desktop target
+        run: flutter config --enable-macos-desktop
+
+      - name: Fetch packages
+        run: flutter pub get
+
+      - name: Build macOS (arm64)
+        env:
+          ARCHS: arm64
+          CODE_SIGNING_ALLOWED: "NO"
+        run: flutter build macos --release
+
+      - name: Create ZIP
+        run: |
+          APP_NAME="evmrider.app"
+          cd build/macos/Build/Products/Release
+          zip -r evmrider-osx-arm64.zip "$APP_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evmrider-osx-arm64
+          path: build/macos/Build/Products/Release/evmrider-osx-arm64.zip
