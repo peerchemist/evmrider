@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:web3dart/web3dart.dart';
 import 'package:wallet/wallet.dart' show EthereumAddress;
@@ -10,7 +11,7 @@ import 'package:evmrider/models/event.dart';
 const _defaultPollInterval = Duration(seconds: 5);
 
 class EthereumEventService {
-  final EthereumConfig _config;
+  late EthereumConfig _config;
   final http.Client _httpClient;
 
   late final Web3Client _client;
@@ -78,13 +79,16 @@ class EthereumEventService {
     StreamController<Event> out,
   ) {
     final ev = _contract.event(eventName);
-    int fromBlock = 22687425;
+
+    // Starting point hierarchy: explicit startBlock > persisted lastBlock > 0
+    int fromBlock =
+        _config.startBlock ??
+        (_config.lastBlock ?? 0); // both nullable in EthereumConfig
 
     final timer = Timer.periodic(interval, (t) async {
       try {
         final latest = await _client.getBlockNumber();
-        if (fromBlock == 0) fromBlock = latest; // first tick
-        if (latest < fromBlock) return; // nothing new yet
+        if (latest < fromBlock) return;
 
         final logs = await _client.getLogs(
           FilterOptions.events(
@@ -96,8 +100,12 @@ class EthereumEventService {
         );
 
         for (final fe in logs) {
-          out.add(_decode(eventName, fe));
+          final event = _decode(eventName, fe);
+          out.add(event);
+          _maybeSaveLastBlock(event.blockNumber); // ← NEW
         }
+
+        // Next window starts after what we just fetched
         fromBlock = latest + 1;
       } catch (e) {
         out.addError(e);
@@ -182,5 +190,23 @@ class EthereumEventService {
   void dispose() {
     _client.dispose();
     _httpClient.close();
+  }
+
+  /// Store the highest block we’ve processed in shared_preferences.
+  void _maybeSaveLastBlock(int blockNumber) async {
+    if (blockNumber <= (_config.lastBlock ?? 0)) return; // nothing new
+
+    _config = EthereumConfig(
+      rpcEndpoint: _config.rpcEndpoint,
+      apiKey: _config.apiKey,
+      contractAddress: _config.contractAddress,
+      contractAbi: _config.contractAbi,
+      eventsToListen: _config.eventsToListen,
+      startBlock: _config.startBlock,
+      lastBlock: blockNumber, // updated
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('ethereum_config', jsonEncode(_config.toJson()));
   }
 }

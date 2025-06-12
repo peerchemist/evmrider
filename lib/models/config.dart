@@ -2,11 +2,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 class EthereumConfig {
-  String rpcEndpoint;
-  String? apiKey;
-  String contractAddress;
-  String contractAbi;
-  List<String> eventsToListen;
+  final String rpcEndpoint;
+  final String? apiKey;
+  final String contractAddress;
+  final String contractAbi;
+  final List<String> eventsToListen;
+  final int? startBlock;
+  final int? lastBlock;
 
   EthereumConfig({
     required this.rpcEndpoint,
@@ -14,6 +16,8 @@ class EthereumConfig {
     required this.contractAddress,
     required this.contractAbi,
     required this.eventsToListen,
+    required this.startBlock,
+    this.lastBlock,
   });
 
   bool isValid() {
@@ -29,6 +33,8 @@ class EthereumConfig {
     'contractAddress': contractAddress,
     'contractAbi': contractAbi,
     'eventsToListen': eventsToListen,
+    'startBlock': startBlock,
+    'lastBlock': lastBlock,
   };
 
   factory EthereumConfig.fromJson(Map<String, dynamic> json) => EthereumConfig(
@@ -37,6 +43,8 @@ class EthereumConfig {
     contractAddress: json['contractAddress'] ?? '',
     contractAbi: json['contractAbi'] ?? '',
     eventsToListen: List<String>.from(json['eventsToListen'] ?? []),
+    startBlock: json['startBlock'] ?? 0,
+    lastBlock: json['lastBlock'] ?? 0,
   );
 
   Future<void> save() async {
