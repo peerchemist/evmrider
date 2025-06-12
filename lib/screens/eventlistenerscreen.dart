@@ -5,8 +5,13 @@ import 'package:evmrider/models/event.dart';
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
+  final VoidCallback? onOpenSettings;
 
-  const EventListenerScreen({super.key, this.eventService});
+  const EventListenerScreen({
+    super.key,
+    this.eventService,
+    this.onOpenSettings,
+  });
 
   @override
   State<EventListenerScreen> createState() => _EventListenerScreenState();
@@ -24,7 +29,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   Widget build(BuildContext context) {
     if (widget.eventService == null) {
       return Scaffold(
-        appBar: AppBar(title: Text('Event Listener')),
+        appBar: AppBar(title: Text('EVM Event Listener')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -47,6 +52,11 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
         title: Text('Event Listener'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: widget.onOpenSettings,
+            tooltip: 'Setup',
+          ),
           IconButton(
             icon: Icon(_isListening ? Icons.stop : Icons.play_arrow),
             onPressed: _toggleListening,

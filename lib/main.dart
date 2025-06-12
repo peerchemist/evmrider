@@ -30,7 +30,6 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
   EthereumConfig? _config;
   EthereumEventService? _eventService;
 
@@ -42,51 +41,47 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _loadConfig() async {
     final cfg = await EthereumConfig.load();
-
-    // Bail out if this State object is gone (e.g., hot‐restart)
     if (!mounted) return;
 
     if (cfg != null && cfg.isValid()) {
-      // Dispose a previous service before replacing it
       _eventService?.dispose();
       setState(() {
         _config = cfg;
         _eventService = EthereumEventService(cfg);
       });
-    } else {
-      setState(() => _config = null);
     }
   }
 
-  void _onConfigUpdated(EthereumConfig config) {
+  /// Called by SetupScreen when the user presses “Save”.
+  void _onConfigUpdated(EthereumConfig cfg) {
     setState(() {
-      _config = config;
-      _eventService = EthereumEventService(config);
+      _config = cfg;
+      _eventService?.dispose();
+      _eventService = EthereumEventService(cfg);
     });
+  }
+
+  /// Opens the Setup screen.
+  void _openSetup() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            SetupScreen(config: _config, onConfigUpdated: _onConfigUpdated),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          SetupScreen(config: _config, onConfigUpdated: _onConfigUpdated),
-          EventListenerScreen(eventService: _eventService),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.settings), label: 'Setup'),
-          NavigationDestination(icon: Icon(Icons.event), label: 'Events'),
-        ],
-      ),
+    return EventListenerScreen(
+      eventService: _eventService,
+      onOpenSettings: _openSetup, // << gear-icon callback
     );
+  }
+
+  @override
+  void dispose() {
+    _eventService?.dispose();
+    super.dispose();
   }
 }
