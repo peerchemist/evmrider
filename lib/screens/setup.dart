@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:evmrider/models/config.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SetupScreen extends StatefulWidget {
   final EthereumConfig? config;
@@ -18,6 +19,7 @@ class _SetupScreenState extends State<SetupScreen> {
   late TextEditingController _apiKeyController;
   late TextEditingController _contractController;
   late TextEditingController _abiController;
+  late TextEditingController _startBlockController;
   List<String> _events = [];
   List<String> _availableEvents = [];
 
@@ -35,6 +37,9 @@ class _SetupScreenState extends State<SetupScreen> {
     );
     _abiController = TextEditingController(
       text: widget.config?.contractAbi ?? '',
+    );
+    _startBlockController = TextEditingController(
+      text: widget.config?.startBlock?.toString() ?? '',
     );
     _events = List.from(widget.config?.eventsToListen ?? []);
     _parseAbiForEvents();
@@ -104,6 +109,27 @@ class _SetupScreenState extends State<SetupScreen> {
                           hintText: 'Enter if required by your RPC provider',
                           border: OutlineInputBorder(),
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _startBlockController,
+                        keyboardType: TextInputType
+                            .number, // ← here (not inside decoration)
+                        decoration: const InputDecoration(
+                          labelText: 'Start block *',
+                          hintText: 'e.g. 19000000',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return null; // optional
+                          }
+                          final n = int.tryParse(value.trim());
+                          if (n == null || n < 0) {
+                            return 'Enter a positive integer';
+                          }
+                          return null;
+                        },
                       ),
                     ],
                   ),
@@ -220,35 +246,57 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<void> _saveConfig() async {
-    if (_formKey.currentState!.validate()) {
-      if (_events.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Please select at least one event to listen for'),
-          ),
-        );
-        return;
-      }
+    if (!_formKey.currentState!.validate()) return;
 
-      final config = EthereumConfig(
-        rpcEndpoint: _rpcController.text,
-        apiKey: _apiKeyController.text.isEmpty ? null : _apiKeyController.text,
-        contractAddress: _contractController.text,
-        contractAbi: _abiController.text,
-        eventsToListen: _events,
+    if (_events.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one event to listen for'),
+        ),
       );
+      return;
+    }
 
-      try {
-        await config.save();
-        widget.onConfigUpdated(config);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Configuration saved successfully!')),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving configuration: $e')),
-        );
+    final startBlock = int.tryParse(_startBlockController.text.trim());
+
+    final config = EthereumConfig(
+      rpcEndpoint: _rpcController.text.trim(),
+      apiKey: _apiKeyController.text.trim().isEmpty
+          ? null
+          : _apiKeyController.text.trim(),
+      contractAddress: _contractController.text.trim(),
+      contractAbi: _abiController.text.trim(),
+      eventsToListen: _events,
+      startBlock: startBlock,
+    );
+
+    try {
+      await config.save(); // ≤— assuming your model already persists itself
+
+      // ─ Also stash the raw values in shared_preferences ─
+      final prefs = await SharedPreferences.getInstance();
+      prefs
+        ..setString('rpcEndpoint', config.rpcEndpoint)
+        ..setString('apiKey', config.apiKey ?? '')
+        ..setString('contractAddress', config.contractAddress)
+        ..setString('contractAbi', config.contractAbi)
+        ..setStringList('eventsToListen', _events);
+
+      // only set the int when we actually have one
+      if (startBlock != null) {
+        await prefs.setInt('startBlock', startBlock);
+      } else {
+        await prefs.remove('startBlock');
       }
+
+      widget.onConfigUpdated(config);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configuration saved successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error saving configuration: $e')));
     }
   }
 
@@ -258,6 +306,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _apiKeyController.dispose();
     _contractController.dispose();
     _abiController.dispose();
+    _startBlockController.dispose();
     super.dispose();
   }
 }
