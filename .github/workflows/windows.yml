@@ -1,4 +1,3 @@
-# Build Windows (x64) on every push
 name: Build Windows (x64)
 
 on:
@@ -27,12 +26,20 @@ jobs:
       - name: Build Windows release
         run: flutter build windows --release
 
-      # Bundle output lives in build/windows/runner/Release
       - name: Create ZIP
         shell: pwsh
         run: |
-          Compress-Archive -Path "build/windows/runner/Release/*" `
-                           -DestinationPath "build/evmrider-win-x64.zip"
+          # Flutter 3.19+ places output in x64/Release, older versions in runner/Release
+          $primary   = "build/windows/x64/runner/Release"
+          $fallback  = "build/windows/runner/Release"
+          $outDir    = if (Test-Path $primary) { $primary } else { $fallback }
+
+          if (-not (Test-Path $outDir)) {
+            Write-Error "Release folder not found: $outDir"
+            exit 1
+          }
+
+          Compress-Archive -Path "$outDir\*" -DestinationPath "build\evmrider-win-x64.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
