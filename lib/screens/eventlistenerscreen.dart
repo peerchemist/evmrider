@@ -37,7 +37,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
               Icon(Icons.settings, size: 64, color: Colors.grey),
               SizedBox(height: 16),
               Text(
-                'Please configure your Ethereum settings first',
+                'Please configure your settings first',
                 style: Theme.of(context).textTheme.headlineSmall,
                 textAlign: TextAlign.center,
               ),
