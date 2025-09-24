@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:evmrider/models/config.dart';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class SetupScreen extends StatefulWidget {
   final EthereumConfig? config;
@@ -20,6 +19,7 @@ class _SetupScreenState extends State<SetupScreen> {
   late TextEditingController _contractController;
   late TextEditingController _abiController;
   late TextEditingController _startBlockController;
+  late TextEditingController _pollIntervalController;
   List<String> _events = [];
   List<String> _availableEvents = [];
 
@@ -39,7 +39,10 @@ class _SetupScreenState extends State<SetupScreen> {
       text: widget.config?.contractAbi ?? '',
     );
     _startBlockController = TextEditingController(
-      text: widget.config?.startBlock?.toString() ?? '',
+      text: widget.config?.startBlock.toString() ?? '',
+    );
+    _pollIntervalController = TextEditingController(
+      text: widget.config?.pollIntervalSeconds.toString() ?? '',
     );
     _events = List.from(widget.config?.eventsToListen ?? []);
     _parseAbiForEvents();
@@ -125,7 +128,24 @@ class _SetupScreenState extends State<SetupScreen> {
                             return null; // optional
                           }
                           final n = int.tryParse(value.trim());
-                          if (n == null || n < 0) {
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _pollIntervalController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Poll Interval (seconds) *',
+                          hintText: 'e.g. 5',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter poll interval';
+                          }
+                          final n = int.tryParse(value.trim());
+                          if (n == null || n <= 0) {
                             return 'Enter a positive integer';
                           }
                           return null;
@@ -258,6 +278,7 @@ class _SetupScreenState extends State<SetupScreen> {
     }
 
     final startBlock = int.tryParse(_startBlockController.text.trim());
+    final pollInterval = int.tryParse(_pollIntervalController.text.trim());
 
     final config = EthereumConfig(
       rpcEndpoint: _rpcController.text.trim(),
@@ -267,33 +288,20 @@ class _SetupScreenState extends State<SetupScreen> {
       contractAddress: _contractController.text.trim(),
       contractAbi: _abiController.text.trim(),
       eventsToListen: _events,
-      startBlock: startBlock,
+      startBlock: startBlock ?? 0,
+      pollIntervalSeconds: pollInterval ?? 5,
     );
 
     try {
-      await config.save(); // ≤— assuming your model already persists itself
-
-      // ─ Also stash the raw values in shared_preferences ─
-      final prefs = await SharedPreferences.getInstance();
-      prefs
-        ..setString('rpcEndpoint', config.rpcEndpoint)
-        ..setString('apiKey', config.apiKey ?? '')
-        ..setString('contractAddress', config.contractAddress)
-        ..setString('contractAbi', config.contractAbi)
-        ..setStringList('eventsToListen', _events);
-
-      // only set the int when we actually have one
-      if (startBlock != null) {
-        await prefs.setInt('startBlock', startBlock);
-      } else {
-        await prefs.remove('startBlock');
-      }
+      await config.save();
 
       widget.onConfigUpdated(config);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Configuration saved successfully!')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error saving configuration: $e')));
@@ -307,6 +315,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _contractController.dispose();
     _abiController.dispose();
     _startBlockController.dispose();
+    _pollIntervalController.dispose();
     super.dispose();
   }
 }

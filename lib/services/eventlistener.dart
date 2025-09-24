@@ -7,15 +7,14 @@ import 'package:wallet/wallet.dart' show EthereumAddress;
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/event.dart';
 
-// Default interval for HTTP polling mode.
-const _defaultPollInterval = Duration(seconds: 5);
-
 class EthereumEventService {
   late EthereumConfig _config;
   final http.Client _httpClient;
 
   late final Web3Client _client;
   late final DeployedContract _contract;
+
+  EthereumConfig get config => _config;
 
   /// Keep polling timers so we can cancel them on `dispose()`.
   final _timers = <Timer>[];
@@ -54,7 +53,7 @@ class EthereumEventService {
   }
 
   // ───────────────────────────────────────── listen ──
-  Stream<Event> listen({Duration pollInterval = _defaultPollInterval}) {
+  Stream<Event> listen() {
     final controller = StreamController<Event>.broadcast(
       onCancel: () async {
         for (final t in _timers) {
@@ -66,7 +65,11 @@ class EthereumEventService {
     );
 
     for (final name in _config.eventsToListen) {
-      _startPolling(name, pollInterval, controller);
+      _startPolling(
+        name,
+        Duration(seconds: _config.pollIntervalSeconds),
+        controller,
+      );
     }
 
     return controller.stream;
@@ -81,9 +84,7 @@ class EthereumEventService {
     final ev = _contract.event(eventName);
 
     // Starting point hierarchy: explicit startBlock > persisted lastBlock > 0
-    int fromBlock =
-        _config.startBlock ??
-        (_config.lastBlock ?? 0); // both nullable in EthereumConfig
+    int fromBlock = _config.startBlock;
 
     final timer = Timer.periodic(interval, (t) async {
       try {
@@ -204,6 +205,7 @@ class EthereumEventService {
       eventsToListen: _config.eventsToListen,
       startBlock: _config.startBlock,
       lastBlock: blockNumber, // updated
+      pollIntervalSeconds: _config.pollIntervalSeconds,
     );
 
     final prefs = await SharedPreferences.getInstance();

@@ -7,8 +7,9 @@ class EthereumConfig {
   final String contractAddress;
   final String contractAbi;
   final List<String> eventsToListen;
-  final int? startBlock;
+  final int startBlock;
   final int? lastBlock;
+  final int pollIntervalSeconds;
 
   EthereumConfig({
     required this.rpcEndpoint,
@@ -16,8 +17,9 @@ class EthereumConfig {
     required this.contractAddress,
     required this.contractAbi,
     required this.eventsToListen,
-    required this.startBlock,
+    this.startBlock = 0,
     this.lastBlock,
+    this.pollIntervalSeconds = 5,
   });
 
   bool isValid() {
@@ -35,6 +37,7 @@ class EthereumConfig {
     'eventsToListen': eventsToListen,
     'startBlock': startBlock,
     'lastBlock': lastBlock,
+    'pollIntervalSeconds': pollIntervalSeconds,
   };
 
   factory EthereumConfig.fromJson(Map<String, dynamic> json) => EthereumConfig(
@@ -45,6 +48,7 @@ class EthereumConfig {
     eventsToListen: List<String>.from(json['eventsToListen'] ?? []),
     startBlock: json['startBlock'] ?? 0,
     lastBlock: json['lastBlock'] ?? 0,
+    pollIntervalSeconds: json['pollIntervalSeconds'] ?? 5,
   );
 
   Future<void> save() async {

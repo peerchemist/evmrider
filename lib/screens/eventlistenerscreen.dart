@@ -23,8 +23,6 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   final List<Event> _events = [];
   StreamSubscription? _eventSubscription;
 
-  final int _pollIntervalSeconds = 10; // 5-second default
-
   void _openSettings() {
     if (widget.onOpenSettings != null) {
       widget.onOpenSettings!();
@@ -223,17 +221,16 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
 
   Future<void> _startListening() async {
     try {
-      _eventSubscription = widget.eventService!
-          .listen(pollInterval: Duration(seconds: _pollIntervalSeconds))
-          .listen(
-            (event) => setState(() => _events.insert(0, event)),
-            onError: (error) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error listening to events: $error')),
-              );
-              setState(() => _isListening = false);
-            },
+      _eventSubscription = widget.eventService!.listen().listen(
+        (event) => setState(() => _events.insert(0, event)),
+        onError: (error) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error listening to events: $error')),
           );
+          setState(() => _isListening = false);
+        },
+      );
       setState(() => _isListening = true);
     } catch (e) {
       ScaffoldMessenger.of(
