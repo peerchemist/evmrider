@@ -24,19 +24,32 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _loadConfig() async {
     final config = await EthereumConfig.load();
+    if (!mounted) return;
     setState(() {
       _config = config;
-      if (_config != null && _config!.isValid()) {
-        _eventService = EthereumEventService(_config!);
-      }
+      _setEventServiceFromConfig(config);
     });
   }
 
   void _onConfigUpdated(EthereumConfig config) {
     setState(() {
       _config = config;
-      _eventService = EthereumEventService(config);
+      _setEventServiceFromConfig(config);
+      _selectedIndex = 1;
     });
+  }
+
+  void _setEventServiceFromConfig(EthereumConfig? config) {
+    _eventService?.dispose();
+    if (config != null && config.isValid()) {
+      _eventService = EthereumEventService(config);
+    } else {
+      _eventService = null;
+    }
+  }
+
+  void _openSetupTab() {
+    setState(() => _selectedIndex = 0);
   }
 
   @override
@@ -46,7 +59,10 @@ class _MainScreenState extends State<MainScreen> {
         index: _selectedIndex,
         children: [
           SetupScreen(config: _config, onConfigUpdated: _onConfigUpdated),
-          EventListenerScreen(eventService: _eventService),
+          EventListenerScreen(
+            eventService: _eventService,
+            onOpenSettings: _openSetupTab,
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -62,5 +78,11 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _eventService?.dispose();
+    super.dispose();
   }
 }
