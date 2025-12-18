@@ -27,6 +27,7 @@ class _SetupScreenState extends State<SetupScreen> {
   List<String> _availableEvents = [];
   Timer? _abiParseDebounce;
   bool _isSaving = false;
+  bool _notificationsEnabled = true;
 
   @override
   void initState() {
@@ -50,6 +51,7 @@ class _SetupScreenState extends State<SetupScreen> {
       text: widget.config?.pollIntervalSeconds.toString() ?? '',
     );
     _events = List.from(widget.config?.eventsToListen ?? []);
+    _notificationsEnabled = widget.config?.notificationsEnabled ?? true;
     _parseAbiForEvents(notify: false);
   }
 
@@ -288,6 +290,15 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
               ),
               SizedBox(height: 24),
+              SwitchListTile.adaptive(
+                title: const Text('Enable notifications'),
+                subtitle: const Text(
+                  'Show a system notification when a subscribed event fires.',
+                ),
+                value: _notificationsEnabled,
+                onChanged: _toggleNotifications,
+              ),
+              const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: _isSaving ? null : _saveConfig,
                 style: ElevatedButton.styleFrom(
@@ -300,6 +311,10 @@ class _SetupScreenState extends State<SetupScreen> {
         ),
       ),
     );
+  }
+
+  void _toggleNotifications(bool enabled) {
+    setState(() => _notificationsEnabled = enabled);
   }
 
   Future<void> _saveConfig() async {
@@ -331,6 +346,7 @@ class _SetupScreenState extends State<SetupScreen> {
       eventsToListen: _events,
       startBlock: startBlock ?? 0,
       pollIntervalSeconds: pollInterval ?? 5,
+      notificationsEnabled: _notificationsEnabled,
     );
 
     try {

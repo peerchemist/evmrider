@@ -295,6 +295,7 @@ class EthereumEventService {
         startBlock: _config.startBlock,
         lastBlock: blockNumber, // updated
         pollIntervalSeconds: _config.pollIntervalSeconds,
+        notificationsEnabled: _config.notificationsEnabled,
       );
 
       final prefs = await SharedPreferences.getInstance();

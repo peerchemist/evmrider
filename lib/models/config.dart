@@ -10,6 +10,7 @@ class EthereumConfig {
   final int startBlock;
   final int? lastBlock;
   final int pollIntervalSeconds;
+  final bool notificationsEnabled;
 
   EthereumConfig({
     required this.rpcEndpoint,
@@ -20,6 +21,7 @@ class EthereumConfig {
     this.startBlock = 0,
     this.lastBlock,
     this.pollIntervalSeconds = 5,
+    this.notificationsEnabled = true,
   });
 
   bool isValid() {
@@ -38,6 +40,7 @@ class EthereumConfig {
     'startBlock': startBlock,
     'lastBlock': lastBlock,
     'pollIntervalSeconds': pollIntervalSeconds,
+    'notificationsEnabled': notificationsEnabled,
   };
 
   factory EthereumConfig.fromJson(Map<String, dynamic> json) => EthereumConfig(
@@ -49,6 +52,7 @@ class EthereumConfig {
     startBlock: json['startBlock'] ?? 0,
     lastBlock: json['lastBlock'] ?? 0,
     pollIntervalSeconds: json['pollIntervalSeconds'] ?? 5,
+    notificationsEnabled: json['notificationsEnabled'] ?? true,
   );
 
   Future<void> save() async {

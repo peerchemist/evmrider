@@ -3,6 +3,7 @@ import 'package:evmrider/services/eventlistener.dart';
 import 'dart:async';
 import 'package:evmrider/models/event.dart';
 import 'package:evmrider/screens/setup.dart';
+import 'package:evmrider/services/notifications.dart';
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
@@ -225,10 +226,14 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     if (_isListening) return;
 
     try {
+      await NotificationService.instance.requestPermissionsIfNeeded();
       await _eventSubscription?.cancel();
       _eventSubscription = widget.eventService!.listen().listen(
         (event) {
           if (!mounted) return;
+          if (widget.eventService?.config.notificationsEnabled ?? true) {
+            unawaited(NotificationService.instance.notifyEvent(event));
+          }
           setState(() {
             _events.insert(0, event);
             if (_events.length > _maxEvents) {
