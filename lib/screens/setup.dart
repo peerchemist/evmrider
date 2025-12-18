@@ -128,6 +128,9 @@ class _SetupScreenState extends State<SetupScreen> {
                             return null; // optional
                           }
                           final n = int.tryParse(value.trim());
+                          if (n == null || n < 0) {
+                            return 'Enter a valid block number';
+                          }
                           return null;
                         },
                       ),
