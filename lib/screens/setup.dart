@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:evmrider/models/config.dart';
 import 'dart:convert';
+import 'dart:async';
 
 class SetupScreen extends StatefulWidget {
   final EthereumConfig? config;
-  final Function(EthereumConfig) onConfigUpdated;
+  final ValueChanged<EthereumConfig> onConfigUpdated;
 
   const SetupScreen({super.key, this.config, required this.onConfigUpdated});
 
@@ -13,6 +14,8 @@ class SetupScreen extends StatefulWidget {
 }
 
 class _SetupScreenState extends State<SetupScreen> {
+  static final RegExp _ethAddressPattern = RegExp(r'^0x[a-fA-F0-9]{40}$');
+
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _rpcController;
   late TextEditingController _apiKeyController;
@@ -22,6 +25,8 @@ class _SetupScreenState extends State<SetupScreen> {
   late TextEditingController _pollIntervalController;
   List<String> _events = [];
   List<String> _availableEvents = [];
+  Timer? _abiParseDebounce;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -45,21 +50,40 @@ class _SetupScreenState extends State<SetupScreen> {
       text: widget.config?.pollIntervalSeconds.toString() ?? '',
     );
     _events = List.from(widget.config?.eventsToListen ?? []);
-    _parseAbiForEvents();
+    _parseAbiForEvents(notify: false);
   }
 
-  void _parseAbiForEvents() {
-    if (_abiController.text.isNotEmpty) {
-      try {
-        final abi = jsonDecode(_abiController.text) as List;
-        _availableEvents = abi
-            .where((item) => item['type'] == 'event')
-            .map<String>((item) => item['name'] as String)
-            .toList();
-        setState(() {});
-      } catch (e) {
+  void _parseAbiForEvents({bool notify = true}) {
+    final raw = _abiController.text.trim();
+    if (raw.isEmpty) {
+      _availableEvents = [];
+      if (notify && mounted) setState(() {});
+      return;
+    }
+
+    try {
+      final abi = jsonDecode(raw);
+      if (abi is! List) {
         _availableEvents = [];
+        if (notify && mounted) setState(() {});
+        return;
       }
+
+      final events = <String>{};
+      for (final entry in abi) {
+        if (entry is! Map) continue;
+        if (entry['type'] != 'event') continue;
+        final name = entry['name'];
+        if (name is String && name.trim().isNotEmpty) {
+          events.add(name);
+        }
+      }
+
+      _availableEvents = events.toList()..sort();
+      if (notify && mounted) setState(() {});
+    } catch (_) {
+      _availableEvents = [];
+      if (notify && mounted) setState(() {});
     }
   }
 
@@ -98,8 +122,12 @@ class _SetupScreenState extends State<SetupScreen> {
                           if (value == null || value.isEmpty) {
                             return 'Please enter RPC endpoint';
                           }
-                          if (!Uri.parse(value).isAbsolute) {
+                          final uri = Uri.tryParse(value.trim());
+                          if (uri == null || !uri.isAbsolute) {
                             return 'Please enter a valid URL';
+                          }
+                          if (uri.scheme != 'http' && uri.scheme != 'https') {
+                            return 'RPC endpoint must start with http:// or https://';
                           }
                           return null;
                         },
@@ -119,7 +147,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         keyboardType: TextInputType
                             .number, // ← here (not inside decoration)
                         decoration: const InputDecoration(
-                          labelText: 'Start block *',
+                          labelText: 'Start block (optional)',
                           hintText: 'e.g. 19000000',
                           border: OutlineInputBorder(),
                         ),
@@ -181,7 +209,7 @@ class _SetupScreenState extends State<SetupScreen> {
                           if (value == null || value.isEmpty) {
                             return 'Please enter contract address';
                           }
-                          if (!value.startsWith('0x') || value.length != 42) {
+                          if (!_ethAddressPattern.hasMatch(value.trim())) {
                             return 'Please enter a valid Ethereum address';
                           }
                           return null;
@@ -202,13 +230,19 @@ class _SetupScreenState extends State<SetupScreen> {
                             return 'Please enter contract ABI';
                           }
                           try {
-                            jsonDecode(value);
+                            jsonDecode(value.trim());
                             return null;
                           } catch (e) {
                             return 'Please enter valid JSON';
                           }
                         },
-                        onChanged: (value) => _parseAbiForEvents(),
+                        onChanged: (_) {
+                          _abiParseDebounce?.cancel();
+                          _abiParseDebounce = Timer(
+                            const Duration(milliseconds: 400),
+                            _parseAbiForEvents,
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -255,11 +289,11 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
               SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _saveConfig,
+                onPressed: _isSaving ? null : _saveConfig,
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: Text('Save Configuration'),
+                child: Text(_isSaving ? 'Saving…' : 'Save Configuration'),
               ),
             ],
           ),
@@ -269,6 +303,8 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<void> _saveConfig() async {
+    if (_isSaving) return;
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
     if (_events.isEmpty) {
@@ -279,6 +315,8 @@ class _SetupScreenState extends State<SetupScreen> {
       );
       return;
     }
+
+    setState(() => _isSaving = true);
 
     final startBlock = int.tryParse(_startBlockController.text.trim());
     final pollInterval = int.tryParse(_pollIntervalController.text.trim());
@@ -300,11 +338,13 @@ class _SetupScreenState extends State<SetupScreen> {
 
       widget.onConfigUpdated(config);
       if (!mounted) return;
+      setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Configuration saved successfully!')),
       );
     } catch (e) {
       if (!mounted) return;
+      setState(() => _isSaving = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error saving configuration: $e')));
@@ -313,6 +353,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
   @override
   void dispose() {
+    _abiParseDebounce?.cancel();
     _rpcController.dispose();
     _apiKeyController.dispose();
     _contractController.dispose();
