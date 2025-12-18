@@ -21,7 +21,8 @@ class EventListenerScreen extends StatefulWidget {
 class _EventListenerScreenState extends State<EventListenerScreen> {
   bool _isListening = false;
   final List<Event> _events = [];
-  StreamSubscription? _eventSubscription;
+  static const int _maxEvents = 200;
+  StreamSubscription<Event>? _eventSubscription;
 
   void _openSettings() {
     if (widget.onOpenSettings != null) {
@@ -158,6 +159,8 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
       itemCount: _events.length,
       itemBuilder: (context, index) {
         final event = _events[index];
+        final tx = event.transactionHash;
+        final txPreview = tx.length <= 10 ? tx : '${tx.substring(0, 10)}…';
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: ExpansionTile(
@@ -165,9 +168,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
               event.eventName,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            subtitle: Text(
-              'Block: ${event.blockNumber} | Tx: ${event.transactionHash.substring(0, 10)}…',
-            ),
+            subtitle: Text('Block: ${event.blockNumber} | Tx: $txPreview'),
             children: [
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -220,29 +221,47 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
       _isListening ? _stopListening() : _startListening();
 
   Future<void> _startListening() async {
+    if (widget.eventService == null) return;
+    if (_isListening) return;
+
     try {
+      await _eventSubscription?.cancel();
       _eventSubscription = widget.eventService!.listen().listen(
-        (event) => setState(() => _events.insert(0, event)),
-        onError: (error) {
+        (event) {
+          if (!mounted) return;
+          setState(() {
+            _events.insert(0, event);
+            if (_events.length > _maxEvents) {
+              _events.removeRange(_maxEvents, _events.length);
+            }
+          });
+        },
+        onError: (Object error, StackTrace st) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error listening to events: $error')),
           );
-          setState(() => _isListening = false);
+          unawaited(_stopListening());
         },
       );
+      if (!mounted) return;
       setState(() => _isListening = true);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to start listening: $e')));
     }
   }
 
-  Future<void> _stopListening() async {
+  Future<void> _stopListening({bool updateState = true}) async {
     await _eventSubscription?.cancel();
     _eventSubscription = null;
-    setState(() => _isListening = false);
+    if (updateState && mounted) {
+      setState(() => _isListening = false);
+    } else {
+      _isListening = false;
+    }
   }
 
   void _clearEvents() {
@@ -253,7 +272,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
 
   @override
   void dispose() {
-    _stopListening();
+    unawaited(_stopListening(updateState: false));
     super.dispose();
   }
 }
