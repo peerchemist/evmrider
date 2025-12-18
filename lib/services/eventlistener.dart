@@ -10,9 +10,14 @@ import 'package:evmrider/models/event.dart';
 class EthereumEventService {
   late EthereumConfig _config;
   final http.Client _httpClient;
+  final bool _ownsHttpClient;
 
   late final Web3Client _client;
   late final DeployedContract _contract;
+  late final Map<String, List<String>> _eventParamNamesByEvent;
+
+  StreamController<Event>? _controller;
+  bool _disposed = false;
 
   EthereumConfig get config => _config;
 
@@ -20,7 +25,8 @@ class EthereumEventService {
   final _timers = <Timer>[];
 
   EthereumEventService(this._config, [http.Client? httpClient])
-    : _httpClient = httpClient ?? http.Client() {
+    : _httpClient = httpClient ?? http.Client(),
+      _ownsHttpClient = httpClient == null {
     _init();
   }
 
@@ -40,6 +46,8 @@ class EthereumEventService {
 
     _client = Web3Client(rpcUrl, _httpClient);
 
+    _eventParamNamesByEvent = _buildEventParamNamesByEvent(_config.contractAbi);
+
     _contract = DeployedContract(
       ContractAbi.fromJson(_config.contractAbi, 'Contract'),
       EthereumAddress.fromHex(_config.contractAddress),
@@ -48,21 +56,41 @@ class EthereumEventService {
 
   String _appendApiKey(String url, String? apiKey) {
     if (apiKey == null || apiKey.isEmpty) return url;
-    final sep = url.contains('?') ? '&' : '?';
-    return '$url${sep}apikey=$apiKey';
+    try {
+      final uri = Uri.parse(url);
+      return uri
+          .replace(
+            queryParameters: <String, String>{
+              ...uri.queryParameters,
+              'apikey': apiKey,
+            },
+          )
+          .toString();
+    } catch (_) {
+      final sep = url.contains('?') ? '&' : '?';
+      return '$url${sep}apikey=${Uri.encodeQueryComponent(apiKey)}';
+    }
   }
 
   // ───────────────────────────────────────── listen ──
   Stream<Event> listen() {
-    final controller = StreamController<Event>.broadcast(
-      onCancel: () async {
-        for (final t in _timers) {
-          t.cancel();
-        }
-        _timers.clear();
-        dispose();
-      },
+    if (_disposed) {
+      throw StateError('EthereumEventService has been disposed.');
+    }
+
+    _controller ??= StreamController<Event>.broadcast(
+      onListen: _startAllPolling,
+      onCancel: _stopAllPolling,
     );
+
+    return _controller!.stream;
+  }
+
+  void _startAllPolling() {
+    if (_timers.isNotEmpty) return;
+
+    final controller = _controller;
+    if (controller == null || controller.isClosed) return;
 
     for (final name in _config.eventsToListen) {
       _startPolling(
@@ -71,8 +99,13 @@ class EthereumEventService {
         controller,
       );
     }
+  }
 
-    return controller.stream;
+  void _stopAllPolling() {
+    for (final t in _timers) {
+      t.cancel();
+    }
+    _timers.clear();
   }
 
   // ───────────────────────────────────── polling loop ──
@@ -81,12 +114,30 @@ class EthereumEventService {
     Duration interval,
     StreamController<Event> out,
   ) {
-    final ev = _contract.event(eventName);
+    final contractEvent = _contract.event(eventName);
+    final paramNames = _eventParamNamesByEvent[eventName] ?? const <String>[];
 
-    // Starting point hierarchy: explicit startBlock > persisted lastBlock > 0
-    int fromBlock = _config.startBlock;
+    // Start from explicit startBlock if provided; otherwise continue from lastBlock.
+    final hasExplicitStart = _config.startBlock > 0;
+    int fromBlock;
+    if (hasExplicitStart) {
+      fromBlock = _config.startBlock;
+    } else if ((_config.lastBlock ?? 0) > 0) {
+      fromBlock = (_config.lastBlock ?? 0) + 1;
+    } else {
+      fromBlock = 0;
+    }
+
+    var inFlight = false;
 
     final timer = Timer.periodic(interval, (t) async {
+      if (out.isClosed || _disposed) {
+        t.cancel();
+        return;
+      }
+      if (inFlight) return;
+      inFlight = true;
+
       try {
         final latest = await _client.getBlockNumber();
         if (latest < fromBlock) return;
@@ -94,22 +145,27 @@ class EthereumEventService {
         final logs = await _client.getLogs(
           FilterOptions.events(
             contract: _contract,
-            event: ev,
+            event: contractEvent,
             fromBlock: BlockNum.exact(fromBlock),
             toBlock: BlockNum.exact(latest),
           ),
         );
 
         for (final fe in logs) {
-          final event = _decode(eventName, fe);
-          out.add(event);
-          _maybeSaveLastBlock(event.blockNumber); // ← NEW
+          final event = _decode(eventName, contractEvent, paramNames, fe);
+          if (!out.isClosed) out.add(event);
         }
+
+        unawaited(_maybeSaveLastBlock(latest));
 
         // Next window starts after what we just fetched
         fromBlock = latest + 1;
-      } catch (e) {
-        out.addError(e);
+      } catch (e, st) {
+        if (!out.isClosed) {
+          out.addError(EthereumEventServiceException(eventName, e), st);
+        }
+      } finally {
+        inFlight = false;
       }
     });
 
@@ -117,20 +173,23 @@ class EthereumEventService {
   }
 
   // ───────────────────────────────────────── decode ──
-  Event _decode(String name, FilterEvent fe) {
+  Event _decode(
+    String name,
+    ContractEvent ev,
+    List<String> paramNames,
+    FilterEvent fe,
+  ) {
     final data = <String, dynamic>{};
 
     try {
-      final ev = _contract.event(name);
       final topics = fe.topics?.whereType<String>().toList() ?? [];
       final decoded = ev.decodeResults(topics, fe.data ?? '');
 
-      final inputs = _eventAbi(name)?['inputs'] as List<dynamic>? ?? [];
       for (var i = 0; i < decoded.length; i++) {
-        final paramName = (i < inputs.length)
-            ? (inputs[i] as Map<String, dynamic>)['name'] as String? ??
-                  'param_$i'
-            : 'param_$i';
+        final paramName =
+            i < paramNames.length && paramNames[i].trim().isNotEmpty
+                ? paramNames[i]
+                : 'param_$i';
         data[paramName] = decoded[i].toString();
       }
     } catch (e) {
@@ -148,12 +207,35 @@ class EthereumEventService {
     );
   }
 
-  Map<String, dynamic>? _eventAbi(String name) {
-    final abi = jsonDecode(_config.contractAbi) as List<dynamic>;
-    return abi.cast<Map<String, dynamic>>().firstWhere(
-      (e) => e['type'] == 'event' && e['name'] == name,
-      orElse: () => <String, dynamic>{},
-    );
+  Map<String, List<String>> _buildEventParamNamesByEvent(String contractAbi) {
+    try {
+      final abi = jsonDecode(contractAbi);
+      if (abi is! List) return const <String, List<String>>{};
+
+      final out = <String, List<String>>{};
+      for (final entry in abi) {
+        if (entry is! Map) continue;
+        if (entry['type'] != 'event') continue;
+        final name = entry['name'];
+        if (name is! String || name.isEmpty) continue;
+
+        final inputs = entry['inputs'];
+        if (inputs is! List) continue;
+
+        final paramNames = <String>[];
+        for (final input in inputs) {
+          if (input is Map && input['name'] is String) {
+            paramNames.add(input['name'] as String);
+          } else {
+            paramNames.add('');
+          }
+        }
+        out[name] = paramNames;
+      }
+      return out;
+    } catch (_) {
+      return const <String, List<String>>{};
+    }
   }
 
   int _blockNumber(FilterEvent fe) {
@@ -189,26 +271,46 @@ class EthereumEventService {
   }
 
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+
+    _stopAllPolling();
+    unawaited(_controller?.close());
+
     _client.dispose();
-    _httpClient.close();
+    if (_ownsHttpClient) _httpClient.close();
   }
 
   /// Store the highest block we’ve processed in shared_preferences.
-  void _maybeSaveLastBlock(int blockNumber) async {
-    if (blockNumber <= (_config.lastBlock ?? 0)) return; // nothing new
+  Future<void> _maybeSaveLastBlock(int blockNumber) async {
+    try {
+      if (blockNumber <= (_config.lastBlock ?? 0)) return; // nothing new
 
-    _config = EthereumConfig(
-      rpcEndpoint: _config.rpcEndpoint,
-      apiKey: _config.apiKey,
-      contractAddress: _config.contractAddress,
-      contractAbi: _config.contractAbi,
-      eventsToListen: _config.eventsToListen,
-      startBlock: _config.startBlock,
-      lastBlock: blockNumber, // updated
-      pollIntervalSeconds: _config.pollIntervalSeconds,
-    );
+      _config = EthereumConfig(
+        rpcEndpoint: _config.rpcEndpoint,
+        apiKey: _config.apiKey,
+        contractAddress: _config.contractAddress,
+        contractAbi: _config.contractAbi,
+        eventsToListen: _config.eventsToListen,
+        startBlock: _config.startBlock,
+        lastBlock: blockNumber, // updated
+        pollIntervalSeconds: _config.pollIntervalSeconds,
+      );
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('ethereum_config', jsonEncode(_config.toJson()));
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('ethereum_config', jsonEncode(_config.toJson()));
+    } catch (_) {
+      // best-effort persistence
+    }
   }
+}
+
+class EthereumEventServiceException implements Exception {
+  final String eventName;
+  final Object error;
+
+  EthereumEventServiceException(this.eventName, this.error);
+
+  @override
+  String toString() => 'EthereumEventServiceException($eventName): $error';
 }
