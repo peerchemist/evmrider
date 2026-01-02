@@ -39,6 +39,7 @@ dependencies:
   http: ^1.6.0
   wallet: ^0.0.18
   flutter_local_notifications: ^19.0.0
+  file_picker: ^8.1.7
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:evmrider/models/config.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 
 class SetupScreen extends StatefulWidget {
   final EthereumConfig? config;
@@ -306,6 +308,15 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
                 child: Text(_isSaving ? 'Saving…' : 'Save Configuration'),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _exportConfig,
+                icon: const Icon(Icons.download),
+                label: const Text('Export Configuration (YAML)'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
             ],
           ),
         ),
@@ -364,6 +375,57 @@ class _SetupScreenState extends State<SetupScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error saving configuration: $e')));
+    }
+  }
+
+  Future<void> _exportConfig() async {
+    final startBlock = int.tryParse(_startBlockController.text.trim());
+    final pollInterval = int.tryParse(_pollIntervalController.text.trim());
+
+    final config = EthereumConfig(
+      rpcEndpoint: _rpcController.text.trim(),
+      apiKey: _apiKeyController.text.trim().isEmpty
+          ? null
+          : _apiKeyController.text.trim(),
+      contractAddress: _contractController.text.trim(),
+      contractAbi: _abiController.text.trim(),
+      eventsToListen: _events,
+      startBlock: startBlock ?? 0,
+      pollIntervalSeconds: pollInterval ?? 5,
+      notificationsEnabled: _notificationsEnabled,
+    );
+
+    if (!config.isValid()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields first'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Select destination for configuration export:',
+        fileName: 'config.yaml',
+        type: FileType.custom,
+        allowedExtensions: ['yaml', 'yml'],
+      );
+
+      if (outputFile == null) return;
+
+      final file = File(outputFile);
+      await file.writeAsString(config.toYaml());
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Configuration exported to $outputFile')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error exporting configuration: $e')));
     }
   }
 

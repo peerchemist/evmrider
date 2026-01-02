@@ -55,6 +55,41 @@ class EthereumConfig {
     notificationsEnabled: json['notificationsEnabled'] ?? true,
   );
 
+  String toYaml() {
+    final buffer = StringBuffer();
+    buffer.writeln('rpcEndpoint: $rpcEndpoint');
+    if (apiKey != null) {
+      buffer.writeln('apiKey: $apiKey');
+    }
+    buffer.writeln('contractAddress: $contractAddress');
+
+    // Format ABI for YAML block scalar
+    String formattedAbi = contractAbi;
+    try {
+      final decoded = jsonDecode(contractAbi);
+      formattedAbi = const JsonEncoder.withIndent('  ').convert(decoded);
+    } catch (_) {
+      // If it's not valid JSON, just use as is
+    }
+
+    buffer.writeln('contractAbi: |');
+    for (final line in formattedAbi.split('\n')) {
+      buffer.writeln('  $line');
+    }
+
+    buffer.writeln('eventsToListen:');
+    for (final event in eventsToListen) {
+      buffer.writeln('  - $event');
+    }
+    buffer.writeln('startBlock: $startBlock');
+    if (lastBlock != null) {
+      buffer.writeln('lastBlock: $lastBlock');
+    }
+    buffer.writeln('pollIntervalSeconds: $pollIntervalSeconds');
+    buffer.writeln('notificationsEnabled: $notificationsEnabled');
+    return buffer.toString();
+  }
+
   Future<void> save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('ethereum_config', jsonEncode(toJson()));
