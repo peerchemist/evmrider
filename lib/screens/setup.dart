@@ -317,6 +317,15 @@ class _SetupScreenState extends State<SetupScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _importConfig,
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Import Configuration (YAML)'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
             ],
           ),
         ),
@@ -427,6 +436,76 @@ class _SetupScreenState extends State<SetupScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Error exporting configuration: $e')));
     }
+  }
+
+  Future<void> _importConfig() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Select configuration file:',
+        type: FileType.custom,
+        allowedExtensions: ['yaml', 'yml'],
+      );
+
+      if (!mounted) return;
+      if (result == null || result.files.isEmpty) return;
+      final path = result.files.single.path;
+      if (path == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selected file is not accessible')),
+        );
+        return;
+      }
+
+      final contents = await File(path).readAsString();
+      final config = EthereumConfig.fromYaml(contents);
+
+      if (!mounted) return;
+      if (config == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid YAML configuration file')),
+        );
+        return;
+      }
+
+      _applyConfigToForm(config);
+
+      if (config.isValid()) {
+        await config.save();
+        widget.onConfigUpdated(config);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            config.isValid()
+                ? 'Configuration imported successfully'
+                : 'Configuration loaded. Please review required fields.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error importing configuration: $e')),
+      );
+    }
+  }
+
+  void _applyConfigToForm(EthereumConfig config) {
+    _rpcController.text = config.rpcEndpoint;
+    _apiKeyController.text = config.apiKey ?? '';
+    _contractController.text = config.contractAddress;
+    _abiController.text = config.contractAbi;
+    _startBlockController.text = config.startBlock.toString();
+    _pollIntervalController.text = config.pollIntervalSeconds.toString();
+    _parseAbiForEvents(notify: false);
+
+    if (!mounted) return;
+    setState(() {
+      _events = List.from(config.eventsToListen);
+      _notificationsEnabled = config.notificationsEnabled;
+    });
   }
 
   @override

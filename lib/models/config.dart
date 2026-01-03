@@ -1,5 +1,6 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yaml/yaml.dart';
 
 class EthereumConfig {
   final String rpcEndpoint;
@@ -54,6 +55,104 @@ class EthereumConfig {
     pollIntervalSeconds: json['pollIntervalSeconds'] ?? 5,
     notificationsEnabled: json['notificationsEnabled'] ?? true,
   );
+
+  static EthereumConfig? fromYaml(String yamlContent) {
+    final doc = loadYaml(yamlContent);
+    if (doc is! YamlMap) return null;
+
+    final normalized = _normalizeYaml(doc);
+    if (normalized is! Map<String, dynamic>) return null;
+
+    final rpcEndpoint = _stringValue(normalized['rpcEndpoint']);
+    final apiKeyValue = _stringValue(normalized['apiKey']);
+    final apiKey = apiKeyValue.isEmpty ? null : apiKeyValue;
+    final contractAddress = _stringValue(normalized['contractAddress']);
+    final contractAbi = _abiValue(normalized['contractAbi']);
+    final eventsToListen = _stringListValue(normalized['eventsToListen']);
+    final startBlock = _intValue(normalized['startBlock'], fallback: 0);
+    final lastBlockValue = normalized.containsKey('lastBlock')
+        ? normalized['lastBlock']
+        : null;
+    final lastBlock = lastBlockValue == null
+        ? null
+        : _intValue(lastBlockValue, fallback: 0);
+    final pollIntervalSeconds = _intValue(
+      normalized['pollIntervalSeconds'],
+      fallback: 5,
+    );
+    final notificationsEnabled = _boolValue(
+      normalized['notificationsEnabled'],
+      fallback: true,
+    );
+
+    return EthereumConfig(
+      rpcEndpoint: rpcEndpoint,
+      apiKey: apiKey,
+      contractAddress: contractAddress,
+      contractAbi: contractAbi,
+      eventsToListen: eventsToListen,
+      startBlock: startBlock,
+      lastBlock: lastBlock,
+      pollIntervalSeconds: pollIntervalSeconds,
+      notificationsEnabled: notificationsEnabled,
+    );
+  }
+
+  static dynamic _normalizeYaml(dynamic value) {
+    if (value is YamlMap) {
+      return value.map(
+        (key, value) => MapEntry(key.toString(), _normalizeYaml(value)),
+      );
+    }
+    if (value is YamlList) {
+      return value.map(_normalizeYaml).toList();
+    }
+    return value;
+  }
+
+  static String _stringValue(dynamic value) {
+    if (value == null) return '';
+    return value.toString();
+  }
+
+  static String _abiValue(dynamic value) {
+    if (value == null) return '';
+    if (value is String) return value;
+    return jsonEncode(value);
+  }
+
+  static List<String> _stringListValue(dynamic value) {
+    if (value == null) return [];
+    if (value is List) {
+      return value
+          .map((entry) => entry.toString().trim())
+          .where((entry) => entry.isNotEmpty)
+          .toList();
+    }
+    final raw = value.toString();
+    if (raw.trim().isEmpty) return [];
+    return raw
+        .split(',')
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
+        .toList();
+  }
+
+  static int _intValue(dynamic value, {int fallback = 0}) {
+    if (value == null) return fallback;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? fallback;
+  }
+
+  static bool _boolValue(dynamic value, {bool fallback = true}) {
+    if (value == null) return fallback;
+    if (value is bool) return value;
+    final normalized = value.toString().trim().toLowerCase();
+    if (normalized == 'true') return true;
+    if (normalized == 'false') return false;
+    return fallback;
+  }
 
   String toYaml() {
     final buffer = StringBuffer();
