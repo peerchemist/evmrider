@@ -63,10 +63,17 @@ class EthereumConfig {
     final normalized = _normalizeYaml(doc);
     if (normalized is! Map<String, dynamic>) return null;
 
+    final rawContractAddress = _readYamlScalar(
+      yamlContent,
+      'contractAddress',
+    );
     final rpcEndpoint = _stringValue(normalized['rpcEndpoint']);
     final apiKeyValue = _stringValue(normalized['apiKey']);
     final apiKey = apiKeyValue.isEmpty ? null : apiKeyValue;
-    final contractAddress = _stringValue(normalized['contractAddress']);
+    final contractAddress = _stringValue(
+      normalized['contractAddress'],
+      rawFallback: rawContractAddress,
+    );
     final contractAbi = _abiValue(normalized['contractAbi']);
     final eventsToListen = _stringListValue(normalized['eventsToListen']);
     final startBlock = _intValue(normalized['startBlock'], fallback: 0);
@@ -110,8 +117,10 @@ class EthereumConfig {
     return value;
   }
 
-  static String _stringValue(dynamic value) {
-    if (value == null) return '';
+  static String _stringValue(dynamic value, {String? rawFallback}) {
+    if (value == null) return rawFallback ?? '';
+    if (value is String) return value;
+    if (rawFallback != null && rawFallback.isNotEmpty) return rawFallback;
     return value.toString();
   }
 
@@ -154,13 +163,41 @@ class EthereumConfig {
     return fallback;
   }
 
+  static String _readYamlScalar(String yamlContent, String key) {
+    final pattern = RegExp(
+      '^\\s*${RegExp.escape(key)}\\s*:\\s*(.+?)\\s*(?:#.*)?\$',
+    );
+    for (final line in const LineSplitter().convert(yamlContent)) {
+      final match = pattern.firstMatch(line);
+      if (match == null) continue;
+      var raw = match.group(1)?.trim() ?? '';
+      if (raw == '|' || raw == '>') return '';
+      raw = _stripYamlQuotes(raw);
+      return raw;
+    }
+    return '';
+  }
+
+  static String _stripYamlQuotes(String value) {
+    if (value.length < 2) return value;
+    final first = value[0];
+    final last = value[value.length - 1];
+    if (first == "'" && last == "'") {
+      return value.substring(1, value.length - 1).replaceAll("''", "'");
+    }
+    if (first == '"' && last == '"') {
+      return value.substring(1, value.length - 1);
+    }
+    return value;
+  }
+
   String toYaml() {
     final buffer = StringBuffer();
     buffer.writeln('rpcEndpoint: $rpcEndpoint');
     if (apiKey != null) {
       buffer.writeln('apiKey: $apiKey');
     }
-    buffer.writeln('contractAddress: $contractAddress');
+    buffer.writeln("contractAddress: '${contractAddress.replaceAll("'", "''")}'");
 
     // Format ABI for YAML block scalar
     String formattedAbi = contractAbi;

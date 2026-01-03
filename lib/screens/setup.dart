@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:evmrider/models/config.dart';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
+import 'package:evmrider/utils/config_file_utils.dart';
 
 class SetupScreen extends StatefulWidget {
   final EthereumConfig? config;
@@ -414,17 +413,13 @@ class _SetupScreenState extends State<SetupScreen> {
     }
 
     try {
-      String? outputFile = await FilePicker.platform.saveFile(
+      final outputFile = await saveYamlFile(
+        config.toYaml(),
         dialogTitle: 'Select destination for configuration export:',
         fileName: 'config.yaml',
-        type: FileType.custom,
-        allowedExtensions: ['yaml', 'yml'],
       );
 
       if (outputFile == null) return;
-
-      final file = File(outputFile);
-      await file.writeAsString(config.toYaml());
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -440,26 +435,14 @@ class _SetupScreenState extends State<SetupScreen> {
 
   Future<void> _importConfig() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final contents = await pickYamlContent(
         dialogTitle: 'Select configuration file:',
-        type: FileType.custom,
-        allowedExtensions: ['yaml', 'yml'],
       );
 
       if (!mounted) return;
-      if (result == null || result.files.isEmpty) return;
-      final path = result.files.single.path;
-      if (path == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Selected file is not accessible')),
-        );
-        return;
-      }
-
-      final contents = await File(path).readAsString();
+      if (contents == null) return;
       final config = EthereumConfig.fromYaml(contents);
 
-      if (!mounted) return;
       if (config == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invalid YAML configuration file')),
