@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=EVM Rider
+Comment=EVM event listener
+Exec=evmrider
+TryExec=evmrider
+Icon=evmrider
+Terminal=false
+Categories=Development;Utility;
+Keywords=EVM;Ethereum;Blockchain;Events;Listener;
+StartupNotify=true
+StartupWMClass=com.peerchemist.evmrider

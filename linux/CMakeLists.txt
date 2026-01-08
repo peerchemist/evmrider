@@ -126,3 +126,13 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# Desktop integration assets.
+set(DESKTOP_FILE "${CMAKE_SOURCE_DIR}/evmrider.desktop")
+set(ICON_FILE "${CMAKE_SOURCE_DIR}/runner/resources/evmrider.png")
+install(FILES "${DESKTOP_FILE}"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications"
+  COMPONENT Runtime)
+install(FILES "${ICON_FILE}"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/512x512/apps"
+  COMPONENT Runtime)
