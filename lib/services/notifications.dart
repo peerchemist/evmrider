@@ -29,7 +29,7 @@ class NotificationService {
     const linux = LinuxInitializationSettings(defaultActionName: 'Open');
     const windows = WindowsInitializationSettings(
       appName: 'EVM Rider',
-      appUserModelId: 'com.example.evmrider',
+      appUserModelId: 'com.peerchemist.evmrider',
       guid: '6a3f00db-776f-4fc0-9a73-7c1ae4f0c8c7',
     );
 

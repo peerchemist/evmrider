@@ -1,4 +1,4 @@
-package com.example.evmrider
+package com.peerchemist.evmrider
 
 import io.flutter.embedding.android.FlutterActivity
 
