@@ -15,6 +15,8 @@ class EthereumEventService {
   late final Web3Client _client;
   late final DeployedContract _contract;
   late final Map<String, List<String>> _eventParamNamesByEvent;
+  late final bool _hasDecimalsFunction;
+  int? _tokenDecimals;
 
   StreamController<Event>? _controller;
   bool _disposed = false;
@@ -47,6 +49,7 @@ class EthereumEventService {
     _client = Web3Client(rpcUrl, _httpClient);
 
     _eventParamNamesByEvent = _buildEventParamNamesByEvent(_config.contractAbi);
+    _hasDecimalsFunction = _abiHasDecimalsFunction(_config.contractAbi);
 
     _contract = DeployedContract(
       ContractAbi.fromJson(_config.contractAbi, 'Contract'),
@@ -190,7 +193,7 @@ class EthereumEventService {
             i < paramNames.length && paramNames[i].trim().isNotEmpty
                 ? paramNames[i]
                 : 'param_$i';
-        data[paramName] = decoded[i].toString();
+        data[paramName] = decoded[i];
       }
     } catch (e) {
       data
@@ -236,6 +239,60 @@ class EthereumEventService {
     } catch (_) {
       return const <String, List<String>>{};
     }
+  }
+
+  bool _abiHasDecimalsFunction(String contractAbi) {
+    try {
+      final abi = jsonDecode(contractAbi);
+      if (abi is! List) return false;
+      for (final entry in abi) {
+        if (entry is! Map) continue;
+        if (entry['type'] != 'function') continue;
+        if (entry['name'] == 'decimals') return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<int> getTokenDecimals() async {
+    if (_tokenDecimals != null) return _tokenDecimals!;
+    if (!_hasDecimalsFunction) {
+      _tokenDecimals = 18;
+      return _tokenDecimals!;
+    }
+
+    try {
+      final function = _contract.function('decimals');
+      final result = await _client.call(
+        contract: _contract,
+        function: function,
+        params: const [],
+      );
+      if (result.isNotEmpty) {
+        final value = result.first;
+        if (value is int) {
+          _tokenDecimals = value;
+          return value;
+        }
+        if (value is BigInt) {
+          final asInt = value.toInt();
+          _tokenDecimals = asInt;
+          return asInt;
+        }
+        if (value is String) {
+          final asInt = int.tryParse(value);
+          if (asInt != null) {
+            _tokenDecimals = asInt;
+            return asInt;
+          }
+        }
+      }
+    } catch (_) {
+      // best-effort; fall back below
+    }
+
+    _tokenDecimals = 18;
+    return _tokenDecimals!;
   }
 
   int _blockNumber(FilterEvent fe) {

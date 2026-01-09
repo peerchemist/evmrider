@@ -24,6 +24,22 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   final List<Event> _events = [];
   static const int _maxEvents = 200;
   StreamSubscription<Event>? _eventSubscription;
+  int _tokenDecimals = 18;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveTokenDecimals();
+  }
+
+  @override
+  void didUpdateWidget(covariant EventListenerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eventService != widget.eventService) {
+      setState(() => _tokenDecimals = 18);
+      _resolveTokenDecimals();
+    }
+  }
 
   void _openSettings() {
     if (widget.onOpenSettings != null) {
@@ -210,12 +226,90 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
-            event.data.toString(),
+            _formatEventData(event.data),
             style: const TextStyle(fontFamily: 'monospace'),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _resolveTokenDecimals() async {
+    final service = widget.eventService;
+    if (service == null) return;
+
+    final decimals = await service.getTokenDecimals();
+    if (!mounted) return;
+    setState(() => _tokenDecimals = decimals < 0 ? 0 : decimals);
+  }
+
+  String _formatEventData(Map<String, dynamic> data) {
+    if (data.isEmpty) return '{}';
+    final formatted = <String, String>{};
+    data.forEach((key, value) {
+      formatted[key] = _formatEventValue(value);
+    });
+    return formatted.toString();
+  }
+
+  String _formatEventValue(dynamic value) {
+    if (value is List) {
+      return '[${value.map(_formatEventValue).join(', ')}]';
+    }
+    final bigInt = _toBigInt(value);
+    if (bigInt != null) {
+      return _formatBigIntWithDecimals(bigInt, _tokenDecimals);
+    }
+    return value.toString();
+  }
+
+  BigInt? _toBigInt(dynamic value) {
+    if (value is BigInt) return value;
+    if (value is int) return BigInt.from(value);
+    if (value is String) {
+      final normalized = value.trim();
+      if (RegExp(r'^-?\d+$').hasMatch(normalized)) {
+        return BigInt.tryParse(normalized);
+      }
+    }
+    return null;
+  }
+
+  String _formatBigIntWithDecimals(BigInt value, int decimals) {
+    if (decimals <= 0) return value.toString();
+    final isNegative = value.isNegative;
+    final raw = value.abs().toString();
+
+    if (raw.length <= decimals) {
+      final padded = raw.padLeft(decimals + 1, '0');
+      final intPart = padded.substring(0, padded.length - decimals);
+      final fracPart = _trimTrailingZeros(
+        padded.substring(padded.length - decimals),
+      );
+      return _buildDecimalString(isNegative, intPart, fracPart);
+    }
+
+    final intPart = raw.substring(0, raw.length - decimals);
+    final fracPart = _trimTrailingZeros(raw.substring(raw.length - decimals));
+    return _buildDecimalString(isNegative, intPart, fracPart);
+  }
+
+  String _buildDecimalString(
+    bool isNegative,
+    String intPart,
+    String fracPart,
+  ) {
+    final sign = isNegative ? '-' : '';
+    if (fracPart.isEmpty) return '$sign$intPart';
+    return '$sign$intPart.$fracPart';
+  }
+
+  String _trimTrailingZeros(String value) {
+    var end = value.length;
+    while (end > 0 && value[end - 1] == '0') {
+      end--;
+    }
+    return value.substring(0, end);
   }
 
   Future<void> _toggleListening() async =>
