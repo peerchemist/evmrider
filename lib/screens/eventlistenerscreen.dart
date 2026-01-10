@@ -206,13 +206,13 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
           'Transaction Hash:',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        Text(event.transactionHash),
+        SelectableText(event.transactionHash),
         const SizedBox(height: 8),
         const Text(
           'Block Number:',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        Text(event.blockNumber.toString()),
+        SelectableText(event.blockNumber.toString()),
         const SizedBox(height: 8),
         const Text(
           'Event Data:',
@@ -225,12 +225,45 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
             color: Colors.grey[100],
             borderRadius: BorderRadius.circular(4),
           ),
-          child: Text(
-            _formatEventData(event.data),
-            style: const TextStyle(fontFamily: 'monospace'),
-          ),
+          child: _buildEventData(event.data),
         ),
       ],
+    );
+  }
+
+  Widget _buildEventData(Map<String, dynamic> data) {
+    if (data.isEmpty) {
+      return const SelectableText(
+        '{}',
+        style: TextStyle(fontFamily: 'monospace'),
+      );
+    }
+
+    final entries =
+        data.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: entries
+          .map(
+            (entry) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.key,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  SelectableText(
+                    _formatEventValue(entry.value),
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -241,15 +274,6 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     final decimals = await service.getTokenDecimals();
     if (!mounted) return;
     setState(() => _tokenDecimals = decimals < 0 ? 0 : decimals);
-  }
-
-  String _formatEventData(Map<String, dynamic> data) {
-    if (data.isEmpty) return '{}';
-    final formatted = <String, String>{};
-    data.forEach((key, value) {
-      formatted[key] = _formatEventValue(value);
-    });
-    return formatted.toString();
   }
 
   String _formatEventValue(dynamic value) {
