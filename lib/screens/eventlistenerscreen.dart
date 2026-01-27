@@ -110,7 +110,11 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
             icon: Icon(_isListening ? Icons.stop : Icons.play_arrow),
             onPressed: _toggleListening,
           ),
-          IconButton(icon: const Icon(Icons.clear), onPressed: _clearEvents),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep),
+            onPressed: _clearEvents,
+            tooltip: 'Clear events',
+          ),
         ],
       ),
       body: Column(
