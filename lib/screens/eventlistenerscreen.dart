@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:evmrider/models/event.dart';
 import 'package:evmrider/screens/setup.dart';
 import 'package:evmrider/services/notifications.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
@@ -206,7 +207,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
           'Transaction Hash:',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        SelectableText(event.transactionHash),
+        _buildTransactionLink(event.transactionHash),
         const SizedBox(height: 8),
         const Text(
           'Block Number:',
@@ -229,6 +230,32 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildTransactionLink(String txHash) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => unawaited(_openTransactionLink(txHash)),
+      mouseCursor: SystemMouseCursors.click,
+      child: Text(
+        txHash,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          decoration: TextDecoration.underline,
+          fontFamily: 'monospace',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openTransactionLink(String txHash) async {
+    final uri = Uri.parse('https://etherscan.io/tx/$txHash');
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $uri')),
+      );
+    }
   }
 
   Widget _buildEventData(Map<String, dynamic> data) {
