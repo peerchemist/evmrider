@@ -5,6 +5,8 @@ import 'package:evmrider/models/event.dart';
 import 'package:evmrider/screens/setup.dart';
 import 'package:evmrider/services/notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:evmrider/utils/utils.dart';
+import 'package:wallet/wallet.dart' as wallet;
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
@@ -311,6 +313,16 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     if (value is List) {
       return '[${value.map(_formatEventValue).join(', ')}]';
     }
+    final address = _formatAddressValue(value);
+    if (address != null) {
+      return address;
+    }
+    if (value is String) {
+      final normalized = value.trim();
+      if (normalized.startsWith('0x') || normalized.startsWith('0X')) {
+        return normalized;
+      }
+    }
     final bigInt = _toBigInt(value);
     if (bigInt != null) {
       return _formatBigIntWithDecimals(bigInt, _tokenDecimals);
@@ -318,11 +330,42 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     return value.toString();
   }
 
+  String? _formatAddressValue(dynamic value) {
+    if (value is wallet.EthereumAddress) {
+      return value.with0x.toLowerCase();
+    }
+    if (value is String) {
+      return normalizeHexAddress(value);
+    }
+    final dynamic dyn = value;
+    try {
+      final hex = dyn.hex;
+      if (hex is String && (hex.startsWith('0x') || hex.startsWith('0X'))) {
+        return hex.toLowerCase();
+      }
+    } catch (_) {
+      // Ignore non-address values.
+    }
+    try {
+      final hexEip55 = dyn.hexEip55;
+      if (hexEip55 is String &&
+          (hexEip55.startsWith('0x') || hexEip55.startsWith('0X'))) {
+        return hexEip55.toLowerCase();
+      }
+    } catch (_) {
+      // Ignore non-address values.
+    }
+    return null;
+  }
+
   BigInt? _toBigInt(dynamic value) {
     if (value is BigInt) return value;
     if (value is int) return BigInt.from(value);
     if (value is String) {
       final normalized = value.trim();
+      if (normalized.startsWith('0x') || normalized.startsWith('0X')) {
+        return null;
+      }
       if (RegExp(r'^-?\d+$').hasMatch(normalized)) {
         return BigInt.tryParse(normalized);
       }
