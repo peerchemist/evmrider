@@ -191,8 +191,8 @@ class EthereumEventService {
       for (var i = 0; i < decoded.length; i++) {
         final paramName =
             i < paramNames.length && paramNames[i].trim().isNotEmpty
-                ? paramNames[i]
-                : 'param_$i';
+            ? paramNames[i]
+            : 'param_$i';
         data[paramName] = decoded[i];
       }
     } catch (e) {

@@ -63,10 +63,7 @@ class EthereumConfig {
     final normalized = _normalizeYaml(doc);
     if (normalized is! Map<String, dynamic>) return null;
 
-    final rawContractAddress = _readYamlScalar(
-      yamlContent,
-      'contractAddress',
-    );
+    final rawContractAddress = _readYamlScalar(yamlContent, 'contractAddress');
     final rpcEndpoint = _stringValue(normalized['rpcEndpoint']);
     final apiKeyValue = _stringValue(normalized['apiKey']);
     final apiKey = apiKeyValue.isEmpty ? null : apiKeyValue;
@@ -197,7 +194,9 @@ class EthereumConfig {
     if (apiKey != null) {
       buffer.writeln('apiKey: $apiKey');
     }
-    buffer.writeln("contractAddress: '${contractAddress.replaceAll("'", "''")}'");
+    buffer.writeln(
+      "contractAddress: '${contractAddress.replaceAll("'", "''")}'",
+    );
 
     // Format ABI for YAML block scalar
     String formattedAbi = contractAbi;

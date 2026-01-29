@@ -3,6 +3,7 @@ import 'package:evmrider/services/eventlistener.dart';
 import 'dart:async';
 import 'package:evmrider/models/event.dart';
 import 'package:evmrider/screens/setup.dart';
+import 'package:evmrider/screens/aboutscreen.dart';
 import 'package:evmrider/services/notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:evmrider/utils/utils.dart';
@@ -103,6 +104,13 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
         title: const Text('EVM Event Listener'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
+            tooltip: 'About',
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: _openSettings, // gear icon
@@ -258,9 +266,9 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     final uri = Uri.parse('https://etherscan.io/tx/$txHash');
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open $uri')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
     }
   }
 
@@ -272,8 +280,8 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
       );
     }
 
-    final entries =
-        data.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    final entries = data.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: entries
@@ -392,11 +400,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     return _buildDecimalString(isNegative, intPart, fracPart);
   }
 
-  String _buildDecimalString(
-    bool isNegative,
-    String intPart,
-    String fracPart,
-  ) {
+  String _buildDecimalString(bool isNegative, String intPart, String fracPart) {
     final sign = isNegative ? '-' : '';
     if (fracPart.isEmpty) return '$sign$intPart';
     return '$sign$intPart.$fracPart';

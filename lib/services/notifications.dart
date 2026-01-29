@@ -43,9 +43,10 @@ class NotificationService {
 
     await _plugin.initialize(initSettings);
 
-    final androidImpl =
-        _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (androidImpl != null) {
       const channel = AndroidNotificationChannel(
         _androidChannelId,
@@ -63,23 +64,26 @@ class NotificationService {
     if (kIsWeb) return;
     await ensureInitialized();
 
-    final androidImpl =
-        _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    final androidImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (androidImpl != null) {
       await androidImpl.requestNotificationsPermission();
     }
 
-    final iosImpl =
-        _plugin.resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>();
+    final iosImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
     if (iosImpl != null) {
       await iosImpl.requestPermissions(alert: true, badge: true, sound: true);
     }
 
-    final macImpl =
-        _plugin.resolvePlatformSpecificImplementation<
-            MacOSFlutterLocalNotificationsPlugin>();
+    final macImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+          MacOSFlutterLocalNotificationsPlugin
+        >();
     if (macImpl != null) {
       await macImpl.requestPermissions(alert: true, badge: true, sound: true);
     }
@@ -111,4 +115,3 @@ class NotificationService {
     );
   }
 }
-
