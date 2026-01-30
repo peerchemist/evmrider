@@ -78,12 +78,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   context,
                 ).textTheme.bodyLarge?.copyWith(color: Colors.grey[700]),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Author: Peerchemist',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: () => showLicensePage(
                   context: context,
