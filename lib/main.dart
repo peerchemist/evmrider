@@ -6,6 +6,7 @@ import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/app_state.dart';
 import 'package:evmrider/screens/eventlistenerscreen.dart';
 import 'package:evmrider/screens/setup.dart';
+import 'package:evmrider/services/background_polling.dart';
 import 'package:evmrider/utils/hive_init.dart';
 
 void main() async {
@@ -14,6 +15,7 @@ void main() async {
   
   Hive.registerAdapter(EthereumConfigAdapter());
   Hive.registerAdapter(AppStateAdapter());
+  await BackgroundPollingService.initialize();
 
   runApp(EthereumEventListenerApp());
 }
@@ -58,6 +60,9 @@ class _MainScreenState extends State<MainScreen> {
         _config = cfg;
         _eventService = EthereumEventService(cfg);
       });
+      unawaited(BackgroundPollingService.schedule(cfg.pollIntervalSeconds));
+    } else {
+      unawaited(BackgroundPollingService.cancel());
     }
   }
 
@@ -68,6 +73,7 @@ class _MainScreenState extends State<MainScreen> {
       _eventService?.dispose();
       _eventService = EthereumEventService(cfg);
     });
+    unawaited(BackgroundPollingService.schedule(cfg.pollIntervalSeconds));
   }
 
   /// Opens the Setup screen.

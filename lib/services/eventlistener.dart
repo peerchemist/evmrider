@@ -8,7 +8,7 @@ import 'package:evmrider/models/event.dart';
 import 'package:evmrider/models/app_state.dart';
 
 class EthereumEventService {
-  late EthereumConfig _config;
+  final EthereumConfig _config;
   final http.Client _httpClient;
   final bool _ownsHttpClient;
 
@@ -87,6 +87,58 @@ class EthereumEventService {
     );
 
     return _controller!.stream;
+  }
+
+  /// Fetch events once for all configured event names.
+  Future<List<Event>> pollOnce() async {
+    if (_disposed) {
+      throw StateError('EthereumEventService has been disposed.');
+    }
+
+    final state = await AppState.load();
+    final lastSeen = state.lastProcessedBlock ?? _config.lastBlock ?? 0;
+
+    int fromBlock;
+    if (lastSeen > 0) {
+      fromBlock = lastSeen + 1;
+    } else if (_config.startBlock > 0) {
+      fromBlock = _config.startBlock;
+    } else {
+      fromBlock = 0;
+    }
+
+    final latest = await _client.getBlockNumber();
+    if (latest < fromBlock) return const <Event>[];
+
+    final out = <Event>[];
+    var hadError = false;
+
+    for (final name in _config.eventsToListen) {
+      try {
+        final contractEvent = _contract.event(name);
+        final paramNames = _eventParamNamesByEvent[name] ?? const <String>[];
+        final logs = await _client.getLogs(
+          FilterOptions.events(
+            contract: _contract,
+            event: contractEvent,
+            fromBlock: BlockNum.exact(fromBlock),
+            toBlock: BlockNum.exact(latest),
+          ),
+        );
+
+        for (final fe in logs) {
+          out.add(_decode(name, contractEvent, paramNames, fe));
+        }
+      } catch (_) {
+        hadError = true;
+      }
+    }
+
+    if (!hadError) {
+      await _maybeSaveLastBlock(latest);
+    }
+
+    return out;
   }
 
   void _startAllPolling() {

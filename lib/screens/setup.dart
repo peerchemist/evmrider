@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:evmrider/models/config.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -30,8 +31,8 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _isSaving = false;
   bool _notificationsEnabled = true;
   int _pollIntervalSeconds = 5;
-  static const int _minPollSeconds = 5;
-  static const int _maxPollSeconds = 3600;
+  int get _minPollSeconds => _isMobilePlatform ? 900 : 5;
+  int get _maxPollSeconds => 3600;
 
   @override
   void initState() {
@@ -170,7 +171,7 @@ class _SetupScreenState extends State<SetupScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Poll Interval (seconds) *',
+                        'Poll Interval *',
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                       const SizedBox(height: 8),
@@ -179,7 +180,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         min: 0,
                         max: 1,
                         divisions: 100,
-                        label: '${_pollIntervalSeconds}s',
+                        label: _formatDurationLabel(_pollIntervalSeconds),
                         onChanged: (value) {
                           setState(() {
                             _pollIntervalSeconds =
@@ -189,14 +190,14 @@ class _SetupScreenState extends State<SetupScreen> {
                       ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: const [
-                          Text('5s'),
-                          Text('3600s'),
+                        children: [
+                          Text(_formatDurationLabel(_minPollSeconds)),
+                          Text(_formatDurationLabel(_maxPollSeconds)),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Selected: ${_pollIntervalSeconds}s',
+                        'Selected: ${_formatDurationLabel(_pollIntervalSeconds)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -516,7 +517,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
   int _clampPollSeconds(int value) {
     final clamped = value.clamp(_minPollSeconds, _maxPollSeconds);
-    return clamped is int ? clamped : clamped.round();
+    return clamped.toInt();
   }
 
   double _pollSecondsToSliderValue(int seconds) {
@@ -529,5 +530,20 @@ class _SetupScreenState extends State<SetupScreen> {
     final ratio = _maxPollSeconds / _minPollSeconds;
     final scaled = _minPollSeconds * math.pow(ratio, value);
     return _clampPollSeconds(scaled.round());
+  }
+
+  bool get _isMobilePlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  String _formatDurationLabel(int seconds) {
+    if (seconds % 3600 == 0) {
+      return '${seconds ~/ 3600}h';
+    }
+    if (seconds % 60 == 0) {
+      return '${seconds ~/ 60}m';
+    }
+    return '${seconds}s';
   }
 }

@@ -1,3 +1,10 @@
+import 'package:flutter/foundation.dart';
+
+bool get isMobilePlatform =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS);
+
 String? normalizeHexAddress(String value) {
   final normalized = value.trim();
   final isPrefixed = normalized.startsWith('0x') || normalized.startsWith('0X');
