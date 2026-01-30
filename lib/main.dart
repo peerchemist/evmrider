@@ -13,8 +13,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initHiveForApp();
   
-  Hive.registerAdapter(EthereumConfigAdapter());
-  Hive.registerAdapter(AppStateAdapter());
   await BackgroundPollingService.initialize();
 
   runApp(EthereumEventListenerApp());

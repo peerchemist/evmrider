@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:workmanager/workmanager.dart';
 
-import 'package:evmrider/models/app_state.dart';
+import 'package:evmrider/hive_registrar.g.dart';
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'package:evmrider/services/event_store.dart';
@@ -14,9 +14,7 @@ const String kBackgroundPollTask = 'com.peerchemist.evmrider.backgroundPoll';
 class BackgroundPollingService {
   static Future<void> initialize() async {
     if (!isMobilePlatform) return;
-    await Workmanager().initialize(
-      callbackDispatcher,
-    );
+    await Workmanager().initialize(callbackDispatcher);
   }
 
   static Future<void> schedule(int intervalSeconds) async {
@@ -47,12 +45,7 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     WidgetsFlutterBinding.ensureInitialized();
     await Hive.initFlutter();
-    try {
-      Hive.registerAdapter(EthereumConfigAdapter());
-    } catch (_) {}
-    try {
-      Hive.registerAdapter(AppStateAdapter());
-    } catch (_) {}
+    Hive.registerAdapters();
 
     final config = await EthereumConfig.load();
     if (config == null || !config.isValid()) {
