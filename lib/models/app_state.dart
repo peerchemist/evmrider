@@ -16,6 +16,7 @@ class AppState extends HiveObject {
     return box.get('current') ?? AppState();
   }
 
+  @override
   Future<void> save() async {
     final box = await Hive.openBox<AppState>('state');
     await box.put('current', this);

@@ -237,6 +237,7 @@ class EthereumConfig extends HiveObject {
     return buffer.toString();
   }
 
+  @override
   Future<void> save() async {
     final box = await Hive.openBox<EthereumConfig>('config');
     await box.put('current', this);
