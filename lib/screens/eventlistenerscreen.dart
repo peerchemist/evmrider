@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'dart:async';
 import 'package:evmrider/models/event.dart';
@@ -288,11 +289,24 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   }
 
   Future<void> _copyEtherscanLink(String url) async {
+    _maybeHapticFeedback();
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Etherscan link copied')));
+  }
+
+  void _maybeHapticFeedback() {
+    if (kIsWeb) return;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+        HapticFeedback.selectionClick();
+        break;
+      default:
+        break;
+    }
   }
 
   Widget _buildEventData(Map<String, dynamic> data) {
