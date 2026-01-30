@@ -43,7 +43,7 @@ class _AboutScreenState extends State<AboutScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'linux/runner/resources/evmrider.png',
+                'assets/icon.png',
                 width: 96,
                 height: 96,
                 errorBuilder: (context, error, stackTrace) {
@@ -61,6 +61,15 @@ class _AboutScreenState extends State<AboutScreen> {
                 'A simple EVM log listening app.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'The app connects to the configured RPC endpoint, parses the ABI, '
+                'tracks selected events, and displays them in real time. It can '
+                'poll periodically, store recent events locally, and send '
+                'notifications when enabled.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 24),
               Text(
@@ -81,7 +90,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   applicationName: _appName,
                   applicationVersion: '$_version+$_buildNumber',
                   applicationIcon: Image.asset(
-                    'linux/runner/resources/evmrider.png',
+                    'assets/icon.png',
                     width: 56,
                     height: 56,
                     errorBuilder: (context, error, stackTrace) {
