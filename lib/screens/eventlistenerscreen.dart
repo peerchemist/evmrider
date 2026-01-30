@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'dart:async';
 import 'package:evmrider/models/event.dart';
@@ -249,16 +250,29 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
 
   Widget _buildTransactionLink(String txHash) {
     final theme = Theme.of(context);
+    final uri = 'https://etherscan.io/tx/$txHash';
     return InkWell(
       onTap: () => unawaited(_openTransactionLink(txHash)),
+      onLongPress: () => unawaited(_copyEtherscanLink(uri)),
       mouseCursor: SystemMouseCursors.click,
-      child: Text(
-        txHash,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.primary,
-          decoration: TextDecoration.underline,
-          fontFamily: 'monospace',
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              txHash,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                decoration: TextDecoration.underline,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy, size: 18),
+            tooltip: 'Copy Etherscan link',
+            onPressed: () => unawaited(_copyEtherscanLink(uri)),
+          ),
+        ],
       ),
     );
   }
@@ -271,6 +285,14 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
     }
+  }
+
+  Future<void> _copyEtherscanLink(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Etherscan link copied')));
   }
 
   Widget _buildEventData(Map<String, dynamic> data) {
