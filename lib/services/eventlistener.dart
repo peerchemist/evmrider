@@ -260,6 +260,7 @@ class EthereumEventService {
       eventName: name,
       transactionHash: fe.transactionHash ?? 'unknown',
       blockNumber: _blockNumber(fe),
+      logIndex: _logIndex(fe),
       data: data,
     );
   }
@@ -379,6 +380,33 @@ class EthereumEventService {
     }
 
     return 0; // unknown / absent
+  }
+
+  int _logIndex(FilterEvent fe) {
+    dynamic raw;
+    try {
+      raw = (fe as dynamic).logIndex;
+    } catch (_) {}
+    if (raw == null) {
+      try {
+        raw = (fe as dynamic).index;
+      } catch (_) {}
+    }
+
+    if (raw is int) return raw;
+    if (raw is BigInt) return raw.toInt();
+    if (raw is num) return raw.toInt();
+
+    if (raw is String) {
+      final s = raw.trim().toLowerCase();
+      return int.tryParse(
+            s.startsWith('0x') ? s.substring(2) : s,
+            radix: s.startsWith('0x') ? 16 : 10,
+          ) ??
+          0;
+    }
+
+    return 0;
   }
 
   void dispose() {

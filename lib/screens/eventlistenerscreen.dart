@@ -542,6 +542,8 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     _events.sort((a, b) {
       final blockCompare = b.blockNumber.compareTo(a.blockNumber);
       if (blockCompare != 0) return blockCompare;
+      final logCompare = b.logIndex.compareTo(a.logIndex);
+      if (logCompare != 0) return logCompare;
       return b.transactionHash.compareTo(a.transactionHash);
     });
   }

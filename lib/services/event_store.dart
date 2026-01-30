@@ -79,7 +79,7 @@ class EventStore {
   }
 
   static String _eventId(Event event) =>
-      '${event.eventName}|${event.blockNumber}|${event.transactionHash}';
+      '${event.eventName}|${event.blockNumber}|${event.transactionHash}|${event.logIndex}';
 
   static List<Event> _decodeEvents(dynamic raw) {
     if (raw is! List) return const [];
@@ -107,12 +107,23 @@ class EventStore {
       blockNumber = int.tryParse(rawBlock) ?? 0;
     }
 
+    var logIndex = 0;
+    final rawLogIndex = raw['logIndex'];
+    if (rawLogIndex is int) {
+      logIndex = rawLogIndex;
+    } else if (rawLogIndex is num) {
+      logIndex = rawLogIndex.toInt();
+    } else if (rawLogIndex is String) {
+      logIndex = int.tryParse(rawLogIndex) ?? 0;
+    }
+
     final data = _normalizeMap(raw['data']);
 
     return Event(
       eventName: name,
       transactionHash: txHash,
       blockNumber: blockNumber,
+      logIndex: logIndex,
       data: data,
     );
   }
@@ -122,6 +133,7 @@ class EventStore {
       'eventName': event.eventName,
       'transactionHash': event.transactionHash,
       'blockNumber': event.blockNumber,
+      'logIndex': event.logIndex,
       'data': _encodeValue(event.data),
     };
   }
