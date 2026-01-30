@@ -41,7 +41,7 @@ class NotificationService {
       windows: windows,
     );
 
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(settings: initSettings);
 
     final androidImpl = _plugin
         .resolvePlatformSpecificImplementation<
@@ -98,10 +98,10 @@ class NotificationService {
     final body = 'Block ${event.blockNumber} • ${event.transactionHash}';
 
     await _plugin.show(
-      id,
-      title,
-      body,
-      const NotificationDetails(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           _androidChannelId,
           _androidChannelName,

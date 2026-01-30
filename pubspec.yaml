@@ -37,8 +37,8 @@ dependencies:
   web3dart: ^3.0.1
   http: ^1.6.0
   wallet: ^0.0.18
-  flutter_local_notifications: ^19.0.0
-  file_picker: ^8.1.7
+  flutter_local_notifications: ^20.0.0
+  file_picker: ^10.3.10
   web: ^1.1.1
   yaml: ^3.1.2
   url_launcher: ^6.3.0
