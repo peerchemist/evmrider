@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:evmrider/models/config.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:evmrider/utils/config_file_utils.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -23,12 +24,14 @@ class _SetupScreenState extends State<SetupScreen> {
   late TextEditingController _contractController;
   late TextEditingController _abiController;
   late TextEditingController _startBlockController;
-  late TextEditingController _pollIntervalController;
   List<String> _events = [];
   List<String> _availableEvents = [];
   Timer? _abiParseDebounce;
   bool _isSaving = false;
   bool _notificationsEnabled = true;
+  int _pollIntervalSeconds = 5;
+  static const int _minPollSeconds = 5;
+  static const int _maxPollSeconds = 3600;
 
   @override
   void initState() {
@@ -48,8 +51,8 @@ class _SetupScreenState extends State<SetupScreen> {
     _startBlockController = TextEditingController(
       text: widget.config?.startBlock.toString() ?? '',
     );
-    _pollIntervalController = TextEditingController(
-      text: widget.config?.pollIntervalSeconds.toString() ?? '',
+    _pollIntervalSeconds = _clampPollSeconds(
+      widget.config?.pollIntervalSeconds ?? _minPollSeconds,
     );
     _events = List.from(widget.config?.eventsToListen ?? []);
     _notificationsEnabled = widget.config?.notificationsEnabled ?? true;
@@ -166,24 +169,35 @@ class _SetupScreenState extends State<SetupScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _pollIntervalController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Poll Interval (seconds) *',
-                          hintText: 'e.g. 5',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter poll interval';
-                          }
-                          final n = int.tryParse(value.trim());
-                          if (n == null || n <= 0) {
-                            return 'Enter a positive integer';
-                          }
-                          return null;
+                      Text(
+                        'Poll Interval (seconds) *',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Slider(
+                        value: _pollSecondsToSliderValue(_pollIntervalSeconds),
+                        min: 0,
+                        max: 1,
+                        divisions: 100,
+                        label: '${_pollIntervalSeconds}s',
+                        onChanged: (value) {
+                          setState(() {
+                            _pollIntervalSeconds =
+                                _sliderValueToPollSeconds(value);
+                          });
                         },
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: const [
+                          Text('5s'),
+                          Text('3600s'),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Selected: ${_pollIntervalSeconds}s',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
@@ -353,7 +367,6 @@ class _SetupScreenState extends State<SetupScreen> {
     setState(() => _isSaving = true);
 
     final startBlock = int.tryParse(_startBlockController.text.trim());
-    final pollInterval = int.tryParse(_pollIntervalController.text.trim());
 
     final config = EthereumConfig(
       rpcEndpoint: _rpcController.text.trim(),
@@ -364,7 +377,7 @@ class _SetupScreenState extends State<SetupScreen> {
       contractAbi: _abiController.text.trim(),
       eventsToListen: _events,
       startBlock: startBlock ?? 0,
-      pollIntervalSeconds: pollInterval ?? 5,
+      pollIntervalSeconds: _pollIntervalSeconds,
       notificationsEnabled: _notificationsEnabled,
     );
 
@@ -388,7 +401,6 @@ class _SetupScreenState extends State<SetupScreen> {
 
   Future<void> _exportConfig() async {
     final startBlock = int.tryParse(_startBlockController.text.trim());
-    final pollInterval = int.tryParse(_pollIntervalController.text.trim());
 
     final config = EthereumConfig(
       rpcEndpoint: _rpcController.text.trim(),
@@ -399,7 +411,7 @@ class _SetupScreenState extends State<SetupScreen> {
       contractAbi: _abiController.text.trim(),
       eventsToListen: _events,
       startBlock: startBlock ?? 0,
-      pollIntervalSeconds: pollInterval ?? 5,
+      pollIntervalSeconds: _pollIntervalSeconds,
       notificationsEnabled: _notificationsEnabled,
     );
 
@@ -481,7 +493,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _contractController.text = config.contractAddress;
     _abiController.text = config.contractAbi;
     _startBlockController.text = config.startBlock.toString();
-    _pollIntervalController.text = config.pollIntervalSeconds.toString();
+    _pollIntervalSeconds = _clampPollSeconds(config.pollIntervalSeconds);
     _parseAbiForEvents(notify: false);
 
     if (!mounted) return;
@@ -499,7 +511,23 @@ class _SetupScreenState extends State<SetupScreen> {
     _contractController.dispose();
     _abiController.dispose();
     _startBlockController.dispose();
-    _pollIntervalController.dispose();
     super.dispose();
+  }
+
+  int _clampPollSeconds(int value) {
+    final clamped = value.clamp(_minPollSeconds, _maxPollSeconds);
+    return clamped is int ? clamped : clamped.round();
+  }
+
+  double _pollSecondsToSliderValue(int seconds) {
+    final clamped = _clampPollSeconds(seconds);
+    final ratio = _maxPollSeconds / _minPollSeconds;
+    return math.log(clamped / _minPollSeconds) / math.log(ratio);
+  }
+
+  int _sliderValueToPollSeconds(double value) {
+    final ratio = _maxPollSeconds / _minPollSeconds;
+    final scaled = _minPollSeconds * math.pow(ratio, value);
+    return _clampPollSeconds(scaled.round());
   }
 }
