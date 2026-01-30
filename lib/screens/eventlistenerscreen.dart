@@ -28,6 +28,7 @@ class EventListenerScreen extends StatefulWidget {
 
 class _EventListenerScreenState extends State<EventListenerScreen> {
   bool _isListening = false;
+  bool _isRefreshing = false;
   final List<Event> _events = [];
   static const int _maxEvents = 200;
   StreamSubscription<Event>? _eventSubscription;
@@ -162,7 +163,12 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
           ),
           // event list
           Expanded(
-            child: _events.isEmpty ? _buildEmptyState() : _buildEventList(),
+            child: RefreshIndicator(
+              onRefresh: _refreshEvents,
+              child: _events.isEmpty
+                  ? _buildRefreshableEmptyState()
+                  : _buildEventList(),
+            ),
           ),
         ],
       ),
@@ -170,30 +176,43 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.event_note, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          Text(
-            'No events captured yet',
-            style: Theme.of(context).textTheme.headlineSmall,
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.event_note, size: 64, color: Colors.grey),
+        const SizedBox(height: 16),
+        Text(
+          'No events captured yet',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _isListening
+              ? 'Waiting for contract events…'
+              : 'Start listening to capture events',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRefreshableEmptyState() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(child: _buildEmptyState()),
           ),
-          const SizedBox(height: 8),
-          Text(
-            _isListening
-                ? 'Waiting for contract events…'
-                : 'Start listening to capture events',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildEventList() {
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       itemCount: _events.length,
       itemBuilder: (context, index) {
         final event = _events[index];
@@ -375,6 +394,47 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     });
   }
 
+  Future<void> _refreshEvents() async {
+    final service = widget.eventService;
+    if (service == null) return;
+    if (_isRefreshing) return;
+
+    setState(() => _isRefreshing = true);
+    try {
+      final events = await service.pollOnce();
+      if (events.isNotEmpty) {
+        final existingIds = _events.map(_eventId).toSet();
+        final freshEvents =
+            events.where((event) => !existingIds.contains(_eventId(event)))
+                .toList();
+        if ((service.config.notificationsEnabled) && freshEvents.isNotEmpty) {
+          for (final event in freshEvents) {
+            unawaited(
+              NotificationService.instance.notifyEvent(event, silent: true),
+            );
+          }
+        }
+        await EventStore.addEvents(
+          service.config,
+          events,
+          maxEvents: _maxEvents,
+        );
+        if (!mounted) return;
+        setState(() {
+          _mergeEvents(events);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+    } finally {
+      if (!mounted) return;
+      setState(() => _isRefreshing = false);
+    }
+  }
+
   String _formatEventValue(dynamic value) {
     if (value is List) {
       return '[${value.map(_formatEventValue).join(', ')}]';
@@ -496,11 +556,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
             ),
           );
           setState(() {
-            _events.add(event);
-            _sortEvents();
-            if (_events.length > _maxEvents) {
-              _events.removeRange(_maxEvents, _events.length);
-            }
+            _mergeEvents([event]);
           });
         },
         onError: (Object error, StackTrace st) {
@@ -547,6 +603,23 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
       return b.transactionHash.compareTo(a.transactionHash);
     });
   }
+
+  void _mergeEvents(List<Event> incoming) {
+    if (incoming.isEmpty) return;
+    final seen = _events.map(_eventId).toSet();
+    for (final event in incoming) {
+      if (seen.add(_eventId(event))) {
+        _events.add(event);
+      }
+    }
+    _sortEvents();
+    if (_events.length > _maxEvents) {
+      _events.removeRange(_maxEvents, _events.length);
+    }
+  }
+
+  String _eventId(Event event) =>
+      '${event.eventName}|${event.blockNumber}|${event.transactionHash}|${event.logIndex}';
 
   @override
   void dispose() {

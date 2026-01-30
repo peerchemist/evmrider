@@ -89,7 +89,7 @@ class NotificationService {
     }
   }
 
-  Future<void> notifyEvent(Event event) async {
+  Future<void> notifyEvent(Event event, {bool silent = false}) async {
     if (kIsWeb) return;
     await ensureInitialized();
 
@@ -101,16 +101,21 @@ class NotificationService {
       id: id,
       title: title,
       body: body,
-      notificationDetails: const NotificationDetails(
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _androidChannelId,
           _androidChannelName,
           channelDescription: _androidChannelDescription,
+          importance:
+              silent ? Importance.low : Importance.defaultImportance,
+          priority: silent ? Priority.low : Priority.defaultPriority,
+          playSound: !silent,
+          enableVibration: !silent,
         ),
-        iOS: DarwinNotificationDetails(),
-        macOS: DarwinNotificationDetails(),
-        linux: LinuxNotificationDetails(),
-        windows: WindowsNotificationDetails(),
+        iOS: DarwinNotificationDetails(presentSound: !silent),
+        macOS: DarwinNotificationDetails(presentSound: !silent),
+        linux: const LinuxNotificationDetails(),
+        windows: const WindowsNotificationDetails(),
       ),
     );
   }
