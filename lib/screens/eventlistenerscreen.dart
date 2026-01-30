@@ -7,6 +7,7 @@ import 'package:evmrider/models/event.dart';
 import 'package:evmrider/screens/setup.dart';
 import 'package:evmrider/screens/aboutscreen.dart';
 import 'package:evmrider/services/notifications.dart';
+import 'package:evmrider/services/event_store.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:evmrider/utils/utils.dart';
 import 'package:wallet/wallet.dart' as wallet;
@@ -36,6 +37,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   void initState() {
     super.initState();
     _resolveTokenDecimals();
+    unawaited(_loadStoredEvents());
   }
 
   @override
@@ -44,6 +46,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     if (oldWidget.eventService != widget.eventService) {
       setState(() => _tokenDecimals = 18);
       _resolveTokenDecimals();
+      unawaited(_loadStoredEvents());
     }
   }
 
@@ -354,6 +357,24 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     setState(() => _tokenDecimals = decimals < 0 ? 0 : decimals);
   }
 
+  Future<void> _loadStoredEvents() async {
+    final config = widget.eventService?.config;
+    if (config == null) {
+      if (!mounted) return;
+      setState(() => _events.clear());
+      return;
+    }
+
+    final stored = await EventStore.load(config, limit: _maxEvents);
+    if (!mounted) return;
+    setState(() {
+      _events
+        ..clear()
+        ..addAll(stored);
+      _sortEvents();
+    });
+  }
+
   String _formatEventValue(dynamic value) {
     if (value is List) {
       return '[${value.map(_formatEventValue).join(', ')}]';
@@ -467,8 +488,16 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
           if (widget.eventService?.config.notificationsEnabled ?? true) {
             unawaited(NotificationService.instance.notifyEvent(event));
           }
+          unawaited(
+            EventStore.addEvent(
+              widget.eventService?.config,
+              event,
+              maxEvents: _maxEvents,
+            ),
+          );
           setState(() {
-            _events.insert(0, event);
+            _events.add(event);
+            _sortEvents();
             if (_events.length > _maxEvents) {
               _events.removeRange(_maxEvents, _events.length);
             }
@@ -503,8 +532,17 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   }
 
   void _clearEvents() {
+    unawaited(EventStore.clear(widget.eventService?.config));
     setState(() {
       _events.clear();
+    });
+  }
+
+  void _sortEvents() {
+    _events.sort((a, b) {
+      final blockCompare = b.blockNumber.compareTo(a.blockNumber);
+      if (blockCompare != 0) return blockCompare;
+      return b.transactionHash.compareTo(a.transactionHash);
     });
   }
 
