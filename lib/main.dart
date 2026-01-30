@@ -6,10 +6,11 @@ import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/app_state.dart';
 import 'package:evmrider/screens/eventlistenerscreen.dart';
 import 'package:evmrider/screens/setup.dart';
+import 'package:evmrider/utils/hive_init.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
+  await initHiveForApp();
   
   Hive.registerAdapter(EthereumConfigAdapter());
   Hive.registerAdapter(AppStateAdapter());
