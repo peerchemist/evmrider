@@ -1,0 +1,23 @@
+import 'package:hive_ce/hive.dart';
+
+part 'app_state.g.dart';
+
+@HiveType(typeId: 1)
+class AppState extends HiveObject {
+  @HiveField(0)
+  int? lastProcessedBlock;
+
+  AppState({
+    this.lastProcessedBlock,
+  });
+
+  static Future<AppState> load() async {
+    final box = await Hive.openBox<AppState>('state');
+    return box.get('current') ?? AppState();
+  }
+
+  Future<void> save() async {
+    final box = await Hive.openBox<AppState>('state');
+    await box.put('current', this);
+  }
+}

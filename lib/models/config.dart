@@ -1,16 +1,28 @@
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:yaml/yaml.dart';
 
-class EthereumConfig {
+part 'config.g.dart';
+
+@HiveType(typeId: 0)
+class EthereumConfig extends HiveObject {
+  @HiveField(0)
   final String rpcEndpoint;
+  @HiveField(1)
   final String? apiKey;
+  @HiveField(2)
   final String contractAddress;
+  @HiveField(3)
   final String contractAbi;
+  @HiveField(4)
   final List<String> eventsToListen;
+  @HiveField(5)
   final int startBlock;
-  final int? lastBlock;
+  @HiveField(6)
+  int? lastBlock;
+  @HiveField(7)
   final int pollIntervalSeconds;
+  @HiveField(8)
   final bool notificationsEnabled;
 
   EthereumConfig({
@@ -226,16 +238,12 @@ class EthereumConfig {
   }
 
   Future<void> save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('ethereum_config', jsonEncode(toJson()));
+    final box = await Hive.openBox<EthereumConfig>('config');
+    await box.put('current', this);
   }
 
   static Future<EthereumConfig?> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final configStr = prefs.getString('ethereum_config');
-    if (configStr != null) {
-      return EthereumConfig.fromJson(jsonDecode(configStr));
-    }
-    return null;
+    final box = await Hive.openBox<EthereumConfig>('config');
+    return box.get('current');
   }
 }

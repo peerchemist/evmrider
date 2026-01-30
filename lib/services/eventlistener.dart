@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:web3dart/web3dart.dart';
 import 'package:wallet/wallet.dart' show EthereumAddress;
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/event.dart';
+import 'package:evmrider/models/app_state.dart';
 
 class EthereumEventService {
   late EthereumConfig _config;
@@ -116,17 +116,19 @@ class EthereumEventService {
     String eventName,
     Duration interval,
     StreamController<Event> out,
-  ) {
+  ) async {
     final contractEvent = _contract.event(eventName);
     final paramNames = _eventParamNamesByEvent[eventName] ?? const <String>[];
 
-    // Start from explicit startBlock if provided; otherwise continue from lastBlock.
-    final hasExplicitStart = _config.startBlock > 0;
+    final state = await AppState.load();
+    final lastSeen = state.lastProcessedBlock ?? _config.lastBlock ?? 0;
+
+    // Prefer lastSeen over startBlock so we always resume where we left off.
     int fromBlock;
-    if (hasExplicitStart) {
+    if (lastSeen > 0) {
+      fromBlock = lastSeen + 1;
+    } else if (_config.startBlock > 0) {
       fromBlock = _config.startBlock;
-    } else if ((_config.lastBlock ?? 0) > 0) {
-      fromBlock = (_config.lastBlock ?? 0) + 1;
     } else {
       fromBlock = 0;
     }
@@ -338,25 +340,20 @@ class EthereumEventService {
     if (_ownsHttpClient) _httpClient.close();
   }
 
-  /// Store the highest block we’ve processed in shared_preferences.
+  /// Store the highest block we’ve processed in AppState.
   Future<void> _maybeSaveLastBlock(int blockNumber) async {
     try {
-      if (blockNumber <= (_config.lastBlock ?? 0)) return; // nothing new
+      final state = await AppState.load();
+      if (blockNumber <= (state.lastProcessedBlock ?? _config.lastBlock ?? 0)) {
+        return; // nothing new
+      }
 
-      _config = EthereumConfig(
-        rpcEndpoint: _config.rpcEndpoint,
-        apiKey: _config.apiKey,
-        contractAddress: _config.contractAddress,
-        contractAbi: _config.contractAbi,
-        eventsToListen: _config.eventsToListen,
-        startBlock: _config.startBlock,
-        lastBlock: blockNumber, // updated
-        pollIntervalSeconds: _config.pollIntervalSeconds,
-        notificationsEnabled: _config.notificationsEnabled,
-      );
+      state.lastProcessedBlock = blockNumber;
+      await state.save();
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('ethereum_config', jsonEncode(_config.toJson()));
+      // Also update local config object for UI consistency if needed
+      _config.lastBlock = blockNumber;
+      await _config.save();
     } catch (_) {
       // best-effort persistence
     }
