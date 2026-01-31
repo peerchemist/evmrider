@@ -32,12 +32,17 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+android/key.properties
 
 # Symbolication related
 app.*.symbols
 
 # Obfuscation related
 app.*.map.json
+.vscode/launch.json
+.vscode/settings.json
+ios/build
+test.dart
 
 # Android Studio will place build artifacts here
 /android/app/debug
