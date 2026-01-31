@@ -10,6 +10,9 @@ class NotificationService {
 
   NotificationService._();
 
+  final StreamController<void> _tapController =
+      StreamController<void>.broadcast();
+
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
@@ -20,6 +23,8 @@ class NotificationService {
   static const String _androidChannelName = 'EVM Events';
   static const String _androidChannelDescription =
       'Notifications when subscribed contract events fire.';
+
+  Stream<void> get onNotificationTap => _tapController.stream;
 
   Future<void> ensureInitialized() async {
     if (_initialized || kIsWeb) return;
@@ -41,7 +46,11 @@ class NotificationService {
       windows: windows,
     );
 
-    await _plugin.initialize(settings: initSettings);
+    await _plugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    );
 
     final androidImpl = _plugin
         .resolvePlatformSpecificImplementation<
@@ -119,4 +128,13 @@ class NotificationService {
       ),
     );
   }
+
+  void _handleNotificationResponse(NotificationResponse response) {
+    _tapController.add(null);
+  }
+}
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) {
+  // No-op: the UI will refresh on resume. This keeps the callback registered.
 }

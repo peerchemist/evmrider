@@ -26,18 +26,26 @@ class EventListenerScreen extends StatefulWidget {
   State<EventListenerScreen> createState() => _EventListenerScreenState();
 }
 
-class _EventListenerScreenState extends State<EventListenerScreen> {
+class _EventListenerScreenState extends State<EventListenerScreen>
+    with WidgetsBindingObserver {
   bool _isListening = false;
   bool _isRefreshing = false;
   final List<Event> _events = [];
   static const int _maxEvents = 200;
   StreamSubscription<Event>? _eventSubscription;
+  StreamSubscription<void>? _notificationTapSubscription;
   int _tokenDecimals = 18;
   static const String _appTitle = 'EVM Event Listener';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(NotificationService.instance.ensureInitialized());
+    _notificationTapSubscription =
+        NotificationService.instance.onNotificationTap.listen((_) {
+          unawaited(_loadStoredEvents());
+        });
     _resolveTokenDecimals();
     unawaited(_loadStoredEvents());
   }
@@ -48,6 +56,13 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     if (oldWidget.eventService != widget.eventService) {
       setState(() => _tokenDecimals = 18);
       _resolveTokenDecimals();
+      unawaited(_loadStoredEvents());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
       unawaited(_loadStoredEvents());
     }
   }
@@ -697,6 +712,8 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _notificationTapSubscription?.cancel();
     unawaited(_stopListening(updateState: false));
     super.dispose();
   }
