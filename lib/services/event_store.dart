@@ -82,7 +82,7 @@ class EventStore {
       '${event.eventName}|${event.blockNumber}|${event.transactionHash}|${event.logIndex}';
 
   static List<Event> _decodeEvents(dynamic raw) {
-    if (raw is! List) return const [];
+    if (raw is! List) return <Event>[];
 
     final events = <Event>[];
     for (final entry in raw) {
