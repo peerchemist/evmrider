@@ -67,6 +67,22 @@ class EventStore {
     await box.delete(key);
   }
 
+  static Future<void> removeEvent(
+    EthereumConfig? config,
+    Event event,
+  ) async {
+    final box = await Hive.openBox(_boxName);
+    final key = _keyForConfig(config);
+    final existing = _decodeEvents(box.get(key));
+    final targetId = _eventId(event);
+    final filtered = existing
+        .where((entry) => _eventId(entry) != targetId)
+        .toList(growable: false);
+    if (filtered.length == existing.length) return;
+    final encoded = filtered.map(_encodeEvent).toList(growable: false);
+    await box.put(key, encoded);
+  }
+
   static String _keyForConfig(EthereumConfig? config) {
     if (config == null) return _defaultKey;
     final raw = [

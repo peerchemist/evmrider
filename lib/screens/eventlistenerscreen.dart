@@ -226,12 +226,24 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
         final event = _events[index];
         final tx = event.transactionHash;
         final txPreview = tx.length <= 10 ? tx : '${tx.substring(0, 10)}…';
-        return Card(
+        final card = Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: ExpansionTile(
-            title: Text(
-              event.eventName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    event.eventName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (!isMobilePlatform)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Delete',
+                    onPressed: () => _removeEvent(event),
+                  ),
+              ],
             ),
             subtitle: Text('Block: ${event.blockNumber} | Tx: $txPreview'),
             children: [
@@ -241,6 +253,30 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
               ),
             ],
           ),
+        );
+        if (!isMobilePlatform) {
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onSecondaryTapDown: (details) =>
+                _showEventContextMenu(event, details.globalPosition),
+            child: card,
+          );
+        }
+        return Dismissible(
+          key: ValueKey(_eventId(event)),
+          direction: DismissDirection.startToEnd,
+          background: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.red[400],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: const Icon(Icons.delete, color: Colors.white),
+          ),
+          onDismissed: (_) => _removeEvent(event),
+          child: card,
         );
       },
     );
@@ -600,6 +636,36 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     setState(() {
       _events.clear();
     });
+  }
+
+  void _removeEvent(Event event) {
+    unawaited(EventStore.removeEvent(widget.eventService?.config, event));
+    setState(() {
+      _events.removeWhere((entry) => _eventId(entry) == _eventId(event));
+    });
+  }
+
+  Future<void> _showEventContextMenu(
+    Event event,
+    Offset globalPosition,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(globalPosition, globalPosition),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'remove',
+          child: Text('Remove'),
+        ),
+      ],
+    );
+    if (selected == 'remove') {
+      _removeEvent(event);
+    }
   }
 
   void _sortEvents() {
