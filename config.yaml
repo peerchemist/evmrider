@@ -575,6 +575,6 @@ contractAbi: |
 eventsToListen:
   - Transfer
   - WPPCBurned
-startBlock: 24150254
+startBlock: 24347139
 pollIntervalSeconds: 60
 notificationsEnabled: true
