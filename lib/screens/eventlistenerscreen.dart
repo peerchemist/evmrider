@@ -33,6 +33,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   static const int _maxEvents = 200;
   StreamSubscription<Event>? _eventSubscription;
   int _tokenDecimals = 18;
+  static const String _appTitle = 'EVM Event Listener';
 
   @override
   void initState() {
@@ -71,7 +72,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
   Widget build(BuildContext context) {
     if (widget.eventService == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('EVM Event Listener')),
+        appBar: AppBar(title: _buildScrollableTitle(_appTitle)),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -107,7 +108,7 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
     // ============== Normal listener UI ===========================
     return Scaffold(
       appBar: AppBar(
-        title: const Text('EVM Event Listener'),
+        title: _buildScrollableTitle(_appTitle),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
@@ -172,6 +173,13 @@ class _EventListenerScreenState extends State<EventListenerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildScrollableTitle(String text) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Text(text),
     );
   }
 
