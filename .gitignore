@@ -46,3 +46,6 @@ app.*.map.json
 
 # Icon helper
 copy_icons.sh
+
+# Helper script
+build_playstore.sh
