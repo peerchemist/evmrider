@@ -11,6 +11,7 @@ import 'package:evmrider/services/event_store.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:evmrider/utils/utils.dart';
 import 'package:wallet/wallet.dart' as wallet;
+import 'package:share_plus/share_plus.dart';
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
@@ -313,9 +314,21 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         ),
         SelectableText(event.blockNumber.toString()),
         const SizedBox(height: 8),
-        const Text(
-          'Event Data:',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            const Text(
+              'Event Data:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: _shouldCopyEventData()
+                  ? 'Copy event data'
+                  : 'Share event data',
+              onPressed: () => unawaited(_shareEventData(event.data)),
+            ),
+          ],
         ),
         Container(
           width: double.infinity,
@@ -378,6 +391,43 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     ).showSnackBar(const SnackBar(content: Text('Etherscan link copied')));
   }
 
+  bool _shouldCopyEventData() {
+    if (kIsWeb) return true;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+        return false;
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return true;
+    }
+  }
+
+  Future<void> _shareEventData(Map<String, dynamic> data) async {
+    final text = _formatEventDataForShare(data);
+    if (text.trim().isEmpty) return;
+    if (_shouldCopyEventData()) {
+      _maybeHapticFeedback();
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Event data copied')));
+      return;
+    }
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box == null
+        ? const Rect.fromLTWH(0, 0, 0, 0)
+        : box.localToGlobal(Offset.zero) & box.size;
+    await Share.share(
+      text,
+      subject: 'Event data',
+      sharePositionOrigin: origin,
+    );
+  }
+
   void _maybeHapticFeedback() {
     if (kIsWeb) return;
     switch (defaultTargetPlatform) {
@@ -424,6 +474,15 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           )
           .toList(),
     );
+  }
+
+  String _formatEventDataForShare(Map<String, dynamic> data) {
+    if (data.isEmpty) return '{}';
+    final entries = data.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries
+        .map((entry) => '${entry.key}: ${_formatEventValue(entry.value)}')
+        .join('\n');
   }
 
   Future<void> _resolveTokenDecimals() async {
