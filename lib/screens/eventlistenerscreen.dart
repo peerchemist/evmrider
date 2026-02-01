@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'dart:async';
 import 'package:evmrider/models/event.dart';
@@ -10,8 +9,8 @@ import 'package:evmrider/services/notifications.dart';
 import 'package:evmrider/services/event_store.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:evmrider/utils/utils.dart';
+import 'package:evmrider/utils/share_event.dart';
 import 'package:wallet/wallet.dart' as wallet;
-import 'package:share_plus/share_plus.dart';
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
@@ -43,8 +42,10 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(NotificationService.instance.ensureInitialized());
-    _notificationTapSubscription =
-        NotificationService.instance.onNotificationTap.listen((_) {
+    _notificationTapSubscription = NotificationService
+        .instance
+        .onNotificationTap
+        .listen((_) {
           unawaited(_loadStoredEvents());
         });
     _resolveTokenDecimals();
@@ -323,10 +324,10 @@ class _EventListenerScreenState extends State<EventListenerScreen>
             const Spacer(),
             IconButton(
               icon: const Icon(Icons.share),
-              tooltip: _shouldCopyEventData()
+              tooltip: shouldCopyTextOnThisPlatform()
                   ? 'Copy event data'
                   : 'Share event data',
-              onPressed: () => unawaited(_shareEventData(event.data)),
+              onPressed: () => unawaited(_shareEventData(event)),
             ),
           ],
         ),
@@ -379,7 +380,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   }
 
   Future<void> _copyEtherscanLink(String url) async {
-    _maybeHapticFeedback();
+    maybeHapticFeedback();
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -387,53 +388,14 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     ).showSnackBar(const SnackBar(content: Text('Etherscan link copied')));
   }
 
-  bool _shouldCopyEventData() {
-    if (kIsWeb) return true;
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-        return false;
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.linux:
-      case TargetPlatform.macOS:
-      case TargetPlatform.windows:
-        return true;
-    }
-  }
-
-  Future<void> _shareEventData(Map<String, dynamic> data) async {
-    final text = _formatEventDataForShare(data);
-    if (text.trim().isEmpty) return;
-    if (_shouldCopyEventData()) {
-      _maybeHapticFeedback();
-      await Clipboard.setData(ClipboardData(text: text));
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Event data copied')));
-      return;
-    }
-    final box = context.findRenderObject() as RenderBox?;
-    final origin = box == null
-        ? const Rect.fromLTWH(0, 0, 0, 0)
-        : box.localToGlobal(Offset.zero) & box.size;
-    await Share.share(
-      text,
+  Future<void> _shareEventData(Event event) async {
+    final text = _formatEventDataForShare(event);
+    await shareOrCopyText(
+      context: context,
+      text: text,
       subject: 'Event data',
-      sharePositionOrigin: origin,
+      copiedToast: 'Event data copied',
     );
-  }
-
-  void _maybeHapticFeedback() {
-    if (kIsWeb) return;
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-        HapticFeedback.selectionClick();
-        break;
-      default:
-        break;
-    }
   }
 
   Widget _buildEventData(Map<String, dynamic> data) {
@@ -472,13 +434,16 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     );
   }
 
-  String _formatEventDataForShare(Map<String, dynamic> data) {
-    if (data.isEmpty) return '{}';
+  String _formatEventDataForShare(Event event) {
+    final data = event.data;
+    final header = 'Event: ${event.eventName}';
+    if (data.isEmpty) return '$header\n{}';
     final entries = data.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
-    return entries
+    final body = entries
         .map((entry) => '${entry.key}: ${_formatEventValue(entry.value)}')
         .join('\n');
+    return '$header\n$body';
   }
 
   Future<void> _resolveTokenDecimals() async {
@@ -518,9 +483,9 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       final events = await service.pollOnce();
       if (events.isNotEmpty) {
         final existingIds = _events.map(_eventId).toSet();
-        final freshEvents =
-            events.where((event) => !existingIds.contains(_eventId(event)))
-                .toList();
+        final freshEvents = events
+            .where((event) => !existingIds.contains(_eventId(event)))
+            .toList();
         if ((service.config.notificationsEnabled) && freshEvents.isNotEmpty) {
           for (final event in freshEvents) {
             unawaited(
@@ -715,10 +680,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     });
   }
 
-  Future<void> _showEventContextMenu(
-    Event event,
-    Offset globalPosition,
-  ) async {
+  Future<void> _showEventContextMenu(Event event, Offset globalPosition) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final selected = await showMenu<String>(
       context: context,
@@ -726,12 +688,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         Rect.fromPoints(globalPosition, globalPosition),
         Offset.zero & overlay.size,
       ),
-      items: const [
-        PopupMenuItem(
-          value: 'remove',
-          child: Text('Remove'),
-        ),
-      ],
+      items: const [PopupMenuItem(value: 'remove', child: Text('Remove'))],
     );
     if (selected == 'remove') {
       _removeEvent(event);
