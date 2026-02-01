@@ -2,8 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
-
-import 'package:evmrider/hive_registrar.g.dart';
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'package:evmrider/services/event_store.dart';
