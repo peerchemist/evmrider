@@ -273,7 +273,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         if (!isMobilePlatform) {
           return GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onSecondaryTapDown: (details) =>
+            onSecondaryTapUp: (details) =>
                 _showEventContextMenu(event, details.globalPosition),
             child: card,
           );
@@ -349,6 +349,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     return InkWell(
       onTap: () => unawaited(_openTransactionLink(txHash)),
       onLongPress: () => unawaited(_copyEtherscanLink(uri)),
+      onSecondaryTap: () => unawaited(_copyEtherscanLink(uri)),
       mouseCursor: SystemMouseCursors.click,
       child: Row(
         children: [
@@ -361,11 +362,6 @@ class _EventListenerScreenState extends State<EventListenerScreen>
                 fontFamily: 'monospace',
               ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.copy, size: 18),
-            tooltip: 'Copy Etherscan link',
-            onPressed: () => unawaited(_copyEtherscanLink(uri)),
           ),
         ],
       ),
