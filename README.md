@@ -29,5 +29,6 @@ flatpak run com.peerchemist.evmrider
 
 ## Screenshots
 
-![setup screen](screenshots/1.png)
-![event screen](screenshots/2.png)
+![setup screen](screenshots/Screenshot_20260131-165116.png)
+![events screen](screenshots/Screenshot_20260131-165035.png)
+![about screen](screenshots/Screenshot_20260131-165049.png)
