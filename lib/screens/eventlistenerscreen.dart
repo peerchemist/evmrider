@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'dart:async';
 import 'package:evmrider/models/event.dart';
@@ -7,6 +9,7 @@ import 'package:evmrider/screens/setup.dart';
 import 'package:evmrider/screens/aboutscreen.dart';
 import 'package:evmrider/services/notifications.dart';
 import 'package:evmrider/services/event_store.dart';
+import 'package:evmrider/screens/event_details_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:evmrider/utils/utils.dart';
 import 'package:evmrider/utils/share_event.dart';
@@ -30,10 +33,10 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     with WidgetsBindingObserver {
   bool _isListening = false;
   bool _isRefreshing = false;
-  final List<Event> _events = [];
   static const int _maxEvents = 200;
   StreamSubscription<Event>? _eventSubscription;
   StreamSubscription<void>? _notificationTapSubscription;
+  ValueListenable<Box>? _eventListenable;
   int _tokenDecimals = 18;
   static const String _appTitle = 'EVM Event Listener';
 
@@ -45,11 +48,9 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     _notificationTapSubscription = NotificationService
         .instance
         .onNotificationTap
-        .listen((_) {
-          unawaited(_loadStoredEvents());
-        });
+        .listen(_handleNotificationTap);
     _resolveTokenDecimals();
-    unawaited(_loadStoredEvents());
+    unawaited(_loadStoredEvents().then((_) => _checkInitialNotification()));
   }
 
   @override
@@ -183,9 +184,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refreshEvents,
-              child: _events.isEmpty
-                  ? _buildRefreshableEmptyState()
-                  : _buildEventList(),
+              child: _buildEventList(),
             ),
           ),
         ],
@@ -236,64 +235,95 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   }
 
   Widget _buildEventList() {
-    return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: _events.length,
-      itemBuilder: (context, index) {
-        final event = _events[index];
-        final tx = event.transactionHash;
-        final txPreview = tx.length <= 10 ? tx : '${tx.substring(0, 10)}…';
-        final card = Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: ExpansionTile(
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    event.eventName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                if (!isMobilePlatform)
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Delete',
-                    onPressed: () => _removeEvent(event),
-                  ),
-              ],
-            ),
-            subtitle: Text('Block: ${event.blockNumber} | Tx: $txPreview'),
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: _buildEventDetails(event),
-              ),
-            ],
-          ),
+    if (_eventListenable == null) return _buildEmptyState();
+
+    return ValueListenableBuilder<Box>(
+      valueListenable: _eventListenable!,
+      builder: (context, box, _) {
+        final events = EventStore.loadSync(
+          box,
+          widget.eventService?.config,
+          limit: _maxEvents,
         );
-        if (!isMobilePlatform) {
-          return GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onSecondaryTapUp: (details) =>
-                _showEventContextMenu(event, details.globalPosition),
-            child: card,
-          );
+        
+        // Update local cache for other operations if needed, or just use this list.
+        // We'll trust this list for rendering.
+        // Note: We might want to sort here if loadSync doesn't guarantee it, 
+        // but loadSync calls _decodeEvents which just decodes.
+        // EventStore.addEvents sorts. 
+        // Let's sort to be safe as per original _sortEvents logic.
+        events.sort((a, b) {
+          final blockCompare = b.blockNumber.compareTo(a.blockNumber);
+          if (blockCompare != 0) return blockCompare;
+          final logCompare = b.logIndex.compareTo(a.logIndex);
+          if (logCompare != 0) return logCompare;
+          return b.transactionHash.compareTo(a.transactionHash);
+        });
+
+        if (events.isEmpty) {
+          return _buildRefreshableEmptyState();
         }
-        return Dismissible(
-          key: ValueKey(_eventId(event)),
-          direction: DismissDirection.startToEnd,
-          background: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.red[400],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          onDismissed: (_) => _removeEvent(event),
-          child: card,
+
+        return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          itemCount: events.length,
+          itemBuilder: (context, index) {
+            final event = events[index];
+            final tx = event.transactionHash;
+            final txPreview = tx.length <= 10 ? tx : '${tx.substring(0, 10)}…';
+            final card = Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ExpansionTile(
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.eventName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (!isMobilePlatform)
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Delete',
+                        onPressed: () => _removeEvent(event),
+                      ),
+                  ],
+                ),
+                subtitle: Text('Block: ${event.blockNumber} | Tx: $txPreview'),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _buildEventDetails(event),
+                  ),
+                ],
+              ),
+            );
+            if (!isMobilePlatform) {
+              return GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onSecondaryTapUp: (details) =>
+                    _showEventContextMenu(event, details.globalPosition),
+                child: card,
+              );
+            }
+            return Dismissible(
+              key: ValueKey(EventStore.eventId(event)),
+              direction: DismissDirection.startToEnd,
+              background: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red[400],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: const Icon(Icons.delete, color: Colors.white),
+              ),
+              onDismissed: (_) => _removeEvent(event),
+              child: card,
+            );
+          },
         );
       },
     );
@@ -459,18 +489,26 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     final config = widget.eventService?.config;
     if (config == null) {
       if (!mounted) return;
-      setState(() => _events.clear());
+      setState(() {
+        _eventListenable = null;
+      });
       return;
     }
 
-    final stored = await EventStore.load(config, limit: _maxEvents);
+    // Force reload from disk to catch background updates
+    await EventStore.closeBox();
+    final listenable = await EventStore.getValueListenable(config);
     if (!mounted) return;
     setState(() {
-      _events
-        ..clear()
-        ..addAll(stored);
-      _sortEvents();
+      _eventListenable = listenable;
     });
+    // Trigger initial load via listener or just let builder handle it?
+    // We still need _events for other methods like _handleNotificationTap to verify existence if we want.
+    // But if we switch to builder, _events might be stale if we don't update it.
+    // Let's defer _events population to the builder or keep it for now?
+    // If I use builder, I don't need to manually populate _events here for display.
+    // user wants: "list of events get re-read" "every time app is opened"
+    // The builder will do that.
   }
 
   Future<void> _refreshEvents() async {
@@ -482,9 +520,10 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     try {
       final events = await service.pollOnce();
       if (events.isNotEmpty) {
-        final existingIds = _events.map(_eventId).toSet();
+        final existingEvents = await EventStore.load(service.config, limit: _maxEvents);
+        final existingIds = existingEvents.map(EventStore.eventId).toSet();
         final freshEvents = events
-            .where((event) => !existingIds.contains(_eventId(event)))
+            .where((event) => !existingIds.contains(EventStore.eventId(event)))
             .toList();
         if ((service.config.notificationsEnabled) && freshEvents.isNotEmpty) {
           for (final event in freshEvents) {
@@ -499,9 +538,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           maxEvents: _maxEvents,
         );
         if (!mounted) return;
-        setState(() {
-          _mergeEvents(events);
-        });
+        // No need to manually merge, listener handles it
       }
     } catch (e) {
       if (!mounted) return;
@@ -509,8 +546,9 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         context,
       ).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
     } finally {
-      if (!mounted) return;
-      setState(() => _isRefreshing = false);
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
     }
   }
 
@@ -634,9 +672,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
               maxEvents: _maxEvents,
             ),
           );
-          setState(() {
-            _mergeEvents([event]);
-          });
+          // No need to manually merge, listener handles it
         },
         onError: (Object error, StackTrace st) {
           if (!mounted) return;
@@ -668,16 +704,12 @@ class _EventListenerScreenState extends State<EventListenerScreen>
 
   void _clearEvents() {
     unawaited(EventStore.clear(widget.eventService?.config));
-    setState(() {
-      _events.clear();
-    });
+    // No need to clear local list manually
   }
 
   void _removeEvent(Event event) {
     unawaited(EventStore.removeEvent(widget.eventService?.config, event));
-    setState(() {
-      _events.removeWhere((entry) => _eventId(entry) == _eventId(event));
-    });
+    // No need to remove from local list manually
   }
 
   Future<void> _showEventContextMenu(Event event, Offset globalPosition) async {
@@ -695,32 +727,41 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     }
   }
 
-  void _sortEvents() {
-    _events.sort((a, b) {
-      final blockCompare = b.blockNumber.compareTo(a.blockNumber);
-      if (blockCompare != 0) return blockCompare;
-      final logCompare = b.logIndex.compareTo(a.logIndex);
-      if (logCompare != 0) return logCompare;
-      return b.transactionHash.compareTo(a.transactionHash);
-    });
+
+
+
+  Future<void> _checkInitialNotification() async {
+    final payload = await NotificationService.instance.getInitialNotificationPayload();
+    if (payload != null) {
+      _handleNotificationTap(payload);
+    }
   }
 
-  void _mergeEvents(List<Event> incoming) {
-    if (incoming.isEmpty) return;
-    final seen = _events.map(_eventId).toSet();
-    for (final event in incoming) {
-      if (seen.add(_eventId(event))) {
-        _events.add(event);
+  void _handleNotificationTap(String? payload) {
+    unawaited(_loadStoredEvents().then((_) async {
+      if (!mounted || payload == null) return;
+      
+      try {
+        final config = widget.eventService?.config;
+        final events = await EventStore.load(config, limit: _maxEvents);
+        final event = events.firstWhere(
+          (e) => EventStore.eventId(e) == payload,
+        );
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EventDetailsScreen(
+              event: event,
+              tokenDecimals: _tokenDecimals,
+            ),
+          ),
+        );
+      } catch (e) {
+        // Event not found, possibly cleared or limit reached.
+        // Just staying on the list is fine, user will see the latest state.
       }
-    }
-    _sortEvents();
-    if (_events.length > _maxEvents) {
-      _events.removeRange(_maxEvents, _events.length);
-    }
+    }));
   }
-
-  String _eventId(Event event) =>
-      '${event.eventName}|${event.blockNumber}|${event.transactionHash}|${event.logIndex}';
 
   @override
   void dispose() {

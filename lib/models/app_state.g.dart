@@ -16,9 +16,7 @@ class AppStateAdapter extends TypeAdapter<AppState> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return AppState(
-      lastProcessedBlock: (fields[0] as num?)?.toInt(),
-    );
+    return AppState(lastProcessedBlock: (fields[0] as num?)?.toInt());
   }
 
   @override

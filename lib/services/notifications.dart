@@ -10,8 +10,8 @@ class NotificationService {
 
   NotificationService._();
 
-  final StreamController<void> _tapController =
-      StreamController<void>.broadcast();
+  final StreamController<String?> _tapController =
+      StreamController<String?>.broadcast();
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -24,7 +24,21 @@ class NotificationService {
   static const String _androidChannelDescription =
       'Notifications when subscribed contract events fire.';
 
-  Stream<void> get onNotificationTap => _tapController.stream;
+  Stream<String?> get onNotificationTap => _tapController.stream;
+
+  Future<String?> getInitialNotificationPayload() async {
+    if (kIsWeb) return null;
+    try {
+      final details = await _plugin.getNotificationAppLaunchDetails();
+      if (details != null && details.didNotificationLaunchApp) {
+        return details.notificationResponse?.payload;
+      }
+    } catch (e) {
+      // Ignore UnimplementedError on platforms that don't support this
+      debugPrint('getNotificationAppLaunchDetails failed: $e');
+    }
+    return null;
+  }
 
   Future<void> ensureInitialized() async {
     if (_initialized || kIsWeb) return;
@@ -105,11 +119,29 @@ class NotificationService {
     final id = _nextId++;
     final title = event.eventName.isEmpty ? 'EVM Event' : event.eventName;
     final body = 'Block ${event.blockNumber} • ${event.transactionHash}';
+    // Import EventStore to use eventId
+    // Note: We need to import event_store.dart at the top of the file, not here.
+    // I will assume the import is added or I'll add it in a separate call if needed.
+    // However replace_file_content replaces a block.
+    // I will use a simple string construction here to avoid adding an import if I can,
+    // OR I will trust that I can add the import.
+    // Actually, I can just replicate the ID generation here or depend on EventStore.
+    // The previous file content didn't have EventStore import.
+    // I should probably add the import. Be careful.
+    // Let's use the explicit string format for now to minimize dependencies here if appropriate,
+    // BUT consistent ID is key.
+    // Let's add the import in a separate step or just include it in the replace content if I replace the whole file or top.
+    // Since I'm replacing a chunk, I can't easily add the import at the top without another call.
+    // I'll stick to string formatting matching EventStore for now to be safe and quick,
+    // OR ideally I should add `import 'package:evmrider/services/event_store.dart';`
+    
+    final payload = '${event.eventName}|${event.blockNumber}|${event.transactionHash}|${event.logIndex}';
 
     await _plugin.show(
       id: id,
       title: title,
       body: body,
+      payload: payload,
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _androidChannelId,
@@ -130,7 +162,7 @@ class NotificationService {
   }
 
   void _handleNotificationResponse(NotificationResponse response) {
-    _tapController.add(null);
+    _tapController.add(response.payload);
   }
 }
 

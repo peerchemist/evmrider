@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:hive_ce/hive.dart';
+import 'package:flutter/foundation.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/event.dart';
@@ -23,6 +23,27 @@ class EventStore {
     return events;
   }
 
+  static List<Event> loadSync(
+    Box box,
+    EthereumConfig? config, {
+    int limit = 32,
+  }) {
+    final key = _keyForConfig(config);
+    final events = _decodeEvents(box.get(key));
+    if (limit > 0 && events.length > limit) {
+      return events.sublist(0, limit);
+    }
+    return events;
+  }
+
+  static Future<ValueListenable<Box>> getValueListenable(
+    EthereumConfig? config,
+  ) async {
+    final box = await Hive.openBox(_boxName);
+    final key = _keyForConfig(config);
+    return box.listenable(keys: [key]);
+  }
+
   static Future<void> addEvent(
     EthereumConfig? config,
     Event event, {
@@ -42,13 +63,13 @@ class EventStore {
     final key = _keyForConfig(config);
 
     final existing = _decodeEvents(box.get(key));
-    final seen = existing.map(_eventId).toSet();
+    final seen = existing.map(eventId).toSet();
 
     final sorted = List<Event>.from(events)
       ..sort((a, b) => a.blockNumber.compareTo(b.blockNumber));
 
     for (final event in sorted) {
-      if (seen.add(_eventId(event))) {
+      if (seen.add(eventId(event))) {
         existing.insert(0, event);
       }
     }
@@ -67,6 +88,12 @@ class EventStore {
     await box.delete(key);
   }
 
+  static Future<void> closeBox() async {
+    if (Hive.isBoxOpen(_boxName)) {
+      await Hive.box(_boxName).close();
+    }
+  }
+
   static Future<void> removeEvent(
     EthereumConfig? config,
     Event event,
@@ -74,9 +101,9 @@ class EventStore {
     final box = await Hive.openBox(_boxName);
     final key = _keyForConfig(config);
     final existing = _decodeEvents(box.get(key));
-    final targetId = _eventId(event);
+    final targetId = eventId(event);
     final filtered = existing
-        .where((entry) => _eventId(entry) != targetId)
+        .where((entry) => eventId(entry) != targetId)
         .toList(growable: false);
     if (filtered.length == existing.length) return;
     final encoded = filtered.map(_encodeEvent).toList(growable: false);
@@ -94,7 +121,7 @@ class EventStore {
     return 'events:$encoded';
   }
 
-  static String _eventId(Event event) =>
+  static String eventId(Event event) =>
       '${event.eventName}|${event.blockNumber}|${event.transactionHash}|${event.logIndex}';
 
   static List<Event> _decodeEvents(dynamic raw) {
