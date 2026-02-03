@@ -117,7 +117,7 @@ class EthereumEventService {
       try {
         final contractEvent = _contract.event(name);
         final paramNames = _eventParamNamesByEvent[name] ?? const <String>[];
-        final logs = await _client.getLogs(
+        final logs = await _getLogsWithRetry(
           FilterOptions.events(
             contract: _contract,
             event: contractEvent,
@@ -164,6 +164,7 @@ class EthereumEventService {
   }
 
   // ───────────────────────────────────── polling loop ──
+  // ───────────────────────────────────── polling loop ──
   void _startPolling(
     String eventName,
     Duration interval,
@@ -199,7 +200,7 @@ class EthereumEventService {
         final latest = await _client.getBlockNumber();
         if (latest < fromBlock) return;
 
-        final logs = await _client.getLogs(
+        final logs = await _getLogsWithRetry(
           FilterOptions.events(
             contract: _contract,
             event: contractEvent,
@@ -227,6 +228,37 @@ class EthereumEventService {
     });
 
     _timers.add(timer);
+  }
+
+  /// Retries getLogs on SocketException or generic ClientException
+  Future<List<FilterEvent>> _getLogsWithRetry(
+    FilterOptions options, {
+    int maxRetries = 5,
+  }) async {
+    var attempt = 0;
+    while (true) {
+      try {
+        return await _client.getLogs(options);
+      } catch (e) {
+        attempt++;
+        if (attempt > maxRetries) rethrow;
+
+        // Check for specific transient errors
+        final s = e.toString().toLowerCase();
+        final isNetwork =
+            s.contains('socketexception') ||
+            s.contains('connection abort') ||
+            s.contains('connection closed') ||
+            s.contains('clientexception') ||
+            e is http.ClientException;
+
+        if (!isNetwork) rethrow;
+
+        // Exponential backoff
+        final delay = Duration(seconds: (1 << (attempt - 1)));
+        await Future.delayed(delay);
+      }
+    }
   }
 
   // ───────────────────────────────────────── decode ──

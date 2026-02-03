@@ -10,6 +10,7 @@ import 'package:evmrider/utils/hive_init.dart';
 import 'package:evmrider/utils/utils.dart';
 
 const String kBackgroundPollTask = 'com.peerchemist.evmrider.backgroundPoll';
+const int _maxStoredEvents = 200;
 
 class BackgroundPollingService {
   static Future<void> initialize() async {
@@ -55,11 +56,23 @@ void callbackDispatcher() {
     final service = EthereumEventService(config);
     try {
       final events = await service.pollOnce();
-      if (events.isNotEmpty) {
-        await EventStore.addEvents(config, events);
+      if (events.isEmpty) {
+        return true;
       }
-      if (config.notificationsEnabled) {
-        for (final event in events) {
+
+      final existingEvents = await EventStore.load(
+        config,
+        limit: _maxStoredEvents,
+      );
+      final existingIds = existingEvents.map(EventStore.eventId).toSet();
+      final freshEvents = events
+          .where((event) => !existingIds.contains(EventStore.eventId(event)))
+          .toList(growable: false);
+
+      await EventStore.addEvents(config, events, maxEvents: _maxStoredEvents);
+
+      if (config.notificationsEnabled && freshEvents.isNotEmpty) {
+        for (final event in freshEvents) {
           await NotificationService.instance.notifyEvent(event);
         }
       }
