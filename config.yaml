@@ -578,3 +578,5 @@ eventsToListen:
 startBlock: 24347139
 pollIntervalSeconds: 60
 notificationsEnabled: true
+blockExplorerUrl: https://etherscan.io
+

@@ -25,6 +25,7 @@ class _SetupScreenState extends State<SetupScreen> {
   late TextEditingController _contractController;
   late TextEditingController _abiController;
   late TextEditingController _startBlockController;
+  late TextEditingController _blockExplorerController;
   List<String> _events = [];
   List<String> _availableEvents = [];
   Timer? _abiParseDebounce;
@@ -51,6 +52,9 @@ class _SetupScreenState extends State<SetupScreen> {
     );
     _startBlockController = TextEditingController(
       text: widget.config?.startBlock.toString() ?? '',
+    );
+    _blockExplorerController = TextEditingController(
+      text: widget.config?.blockExplorerUrl ?? 'https://etherscan.io',
     );
     _pollIntervalSeconds = _clampPollSeconds(
       widget.config?.pollIntervalSeconds ?? _minPollSeconds,
@@ -165,6 +169,25 @@ class _SetupScreenState extends State<SetupScreen> {
                           final n = int.tryParse(value.trim());
                           if (n == null || n < 0) {
                             return 'Enter a valid block number';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _blockExplorerController,
+                        decoration: const InputDecoration(
+                          labelText: 'Block Explorer URL',
+                          hintText: 'https://etherscan.io',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a block explorer URL';
+                          }
+                          final uri = Uri.tryParse(value.trim());
+                          if (uri == null || !uri.isAbsolute) {
+                            return 'Please enter a valid URL';
                           }
                           return null;
                         },
@@ -494,6 +517,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _contractController.text = config.contractAddress;
     _abiController.text = config.contractAbi;
     _startBlockController.text = config.startBlock.toString();
+    _blockExplorerController.text = config.blockExplorerUrl;
     _pollIntervalSeconds = _clampPollSeconds(config.pollIntervalSeconds);
     _parseAbiForEvents(notify: false);
 
@@ -512,6 +536,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _contractController.dispose();
     _abiController.dispose();
     _startBlockController.dispose();
+    _blockExplorerController.dispose();
     super.dispose();
   }
 

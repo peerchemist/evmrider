@@ -24,6 +24,8 @@ class EthereumConfig extends HiveObject {
   final int pollIntervalSeconds;
   @HiveField(8)
   final bool notificationsEnabled;
+  @HiveField(9)
+  final String blockExplorerUrl;
 
   EthereumConfig({
     required this.rpcEndpoint,
@@ -35,6 +37,7 @@ class EthereumConfig extends HiveObject {
     this.lastBlock,
     this.pollIntervalSeconds = 5,
     this.notificationsEnabled = true,
+    this.blockExplorerUrl = 'https://etherscan.io',
   });
 
   bool isValid() {
@@ -54,6 +57,7 @@ class EthereumConfig extends HiveObject {
     'lastBlock': lastBlock,
     'pollIntervalSeconds': pollIntervalSeconds,
     'notificationsEnabled': notificationsEnabled,
+    'blockExplorerUrl': blockExplorerUrl,
   };
 
   factory EthereumConfig.fromJson(Map<String, dynamic> json) => EthereumConfig(
@@ -66,6 +70,7 @@ class EthereumConfig extends HiveObject {
     lastBlock: json['lastBlock'] ?? 0,
     pollIntervalSeconds: json['pollIntervalSeconds'] ?? 5,
     notificationsEnabled: json['notificationsEnabled'] ?? true,
+    blockExplorerUrl: json['blockExplorerUrl'] ?? 'https://etherscan.io',
   );
 
   static EthereumConfig? fromYaml(String yamlContent) {
@@ -100,6 +105,14 @@ class EthereumConfig extends HiveObject {
       normalized['notificationsEnabled'],
       fallback: true,
     );
+    final blockExplorerUrl = _stringValue(
+      normalized['blockExplorerUrl'],
+      rawFallback: 'https://etherscan.io',
+    );
+    if (blockExplorerUrl.isEmpty) {
+      // Ensure we have a valid fallback if empty string provided
+      // or return default if null
+    }
 
     return EthereumConfig(
       rpcEndpoint: rpcEndpoint,
@@ -111,6 +124,7 @@ class EthereumConfig extends HiveObject {
       lastBlock: lastBlock,
       pollIntervalSeconds: pollIntervalSeconds,
       notificationsEnabled: notificationsEnabled,
+      blockExplorerUrl: blockExplorerUrl.isEmpty ? 'https://etherscan.io' : blockExplorerUrl,
     );
   }
 
@@ -234,6 +248,7 @@ class EthereumConfig extends HiveObject {
     }
     buffer.writeln('pollIntervalSeconds: $pollIntervalSeconds');
     buffer.writeln('notificationsEnabled: $notificationsEnabled');
+    buffer.writeln('blockExplorerUrl: $blockExplorerUrl');
     return buffer.toString();
   }
 

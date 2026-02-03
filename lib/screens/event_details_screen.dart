@@ -4,16 +4,20 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:evmrider/models/event.dart';
 import 'package:evmrider/utils/utils.dart';
 import 'package:evmrider/utils/share_event.dart';
+import 'package:evmrider/utils/block_explorer.dart';
+import 'package:evmrider/models/config.dart';
 import 'package:wallet/wallet.dart' as wallet;
 
 class EventDetailsScreen extends StatefulWidget {
   final Event event;
   final int tokenDecimals;
+  final EthereumConfig? config;
 
   const EventDetailsScreen({
     super.key,
     required this.event,
     this.tokenDecimals = 18,
+    this.config,
   });
 
   @override
@@ -21,6 +25,16 @@ class EventDetailsScreen extends StatefulWidget {
 }
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
+  late final BlockExplorer _blockExplorer;
+
+  @override
+  void initState() {
+    super.initState();
+    _blockExplorer = BlockExplorer(
+      widget.config?.blockExplorerUrl ?? 'https://etherscan.io',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = widget.event;
@@ -49,7 +63,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               'Block Number:',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            SelectableText(event.blockNumber.toString()),
+            _buildBlockLink(event.blockNumber),
             const SizedBox(height: 16),
             const Text(
               'Event Data:',
@@ -71,13 +85,33 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  Widget _buildBlockLink(int blockNumber) {
+    final theme = Theme.of(context);
+    final link = _blockExplorer.blockLink(blockNumber);
+    
+    return InkWell(
+      onTap: () => _openLink(link),
+      onLongPress: () => _copyLink(link),
+      onSecondaryTap: () => _copyLink(link),
+      mouseCursor: SystemMouseCursors.click,
+      child: Text(
+        blockNumber.toString(),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          decoration: TextDecoration.underline,
+          fontFamily: 'monospace',
+        ),
+      ),
+    );
+  }
+
   Widget _buildTransactionLink(String txHash) {
     final theme = Theme.of(context);
-    final uri = 'https://etherscan.io/tx/$txHash';
+    final link = _blockExplorer.transactionLink(txHash);
     return InkWell(
-      onTap: () => _openTransactionLink(txHash),
-      onLongPress: () => _copyEtherscanLink(uri),
-      onSecondaryTap: () => _copyEtherscanLink(uri),
+      onTap: () => _openLink(link),
+      onLongPress: () => _copyLink(link),
+      onSecondaryTap: () => _copyLink(link),
       mouseCursor: SystemMouseCursors.click,
       child: Text(
         txHash,
@@ -90,8 +124,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-  Future<void> _openTransactionLink(String txHash) async {
-    final uri = Uri.parse('https://etherscan.io/tx/$txHash');
+  Future<void> _openLink(String url) async {
+    final uri = Uri.parse(url);
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       ScaffoldMessenger.of(
@@ -100,12 +134,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
-  Future<void> _copyEtherscanLink(String url) async {
+  Future<void> _copyLink(String url) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Etherscan link copied')));
+    ).showSnackBar(const SnackBar(content: Text('Link copied')));
   }
 
   Future<void> _shareEventData(Event event) async {

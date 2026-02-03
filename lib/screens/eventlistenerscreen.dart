@@ -13,6 +13,7 @@ import 'package:evmrider/screens/event_details_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:evmrider/utils/utils.dart';
 import 'package:evmrider/utils/share_event.dart';
+import 'package:evmrider/utils/block_explorer.dart';
 import 'package:wallet/wallet.dart' as wallet;
 
 class EventListenerScreen extends StatefulWidget {
@@ -376,11 +377,15 @@ class _EventListenerScreenState extends State<EventListenerScreen>
 
   Widget _buildTransactionLink(String txHash) {
     final theme = Theme.of(context);
-    final uri = 'https://etherscan.io/tx/$txHash';
+    final explorer = BlockExplorer(
+      widget.eventService?.config.blockExplorerUrl ?? 'https://etherscan.io',
+    );
+    final link = explorer.transactionLink(txHash);
+
     return InkWell(
-      onTap: () => unawaited(_openTransactionLink(txHash)),
-      onLongPress: () => unawaited(_copyEtherscanLink(uri)),
-      onSecondaryTap: () => unawaited(_copyEtherscanLink(uri)),
+      onTap: () => unawaited(_openTransactionLink(link)),
+      onLongPress: () => unawaited(_copyLink(link)),
+      onSecondaryTap: () => unawaited(_copyLink(link)),
       mouseCursor: SystemMouseCursors.click,
       child: Row(
         children: [
@@ -399,8 +404,8 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     );
   }
 
-  Future<void> _openTransactionLink(String txHash) async {
-    final uri = Uri.parse('https://etherscan.io/tx/$txHash');
+  Future<void> _openTransactionLink(String url) async {
+    final uri = Uri.parse(url);
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       ScaffoldMessenger.of(
@@ -409,13 +414,13 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     }
   }
 
-  Future<void> _copyEtherscanLink(String url) async {
+  Future<void> _copyLink(String url) async {
     maybeHapticFeedback();
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Etherscan link copied')));
+    ).showSnackBar(const SnackBar(content: Text('Link copied')));
   }
 
   Future<void> _shareEventData(Event event) async {
@@ -753,6 +758,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
             builder: (_) => EventDetailsScreen(
               event: event,
               tokenDecimals: _tokenDecimals,
+              config: config,
             ),
           ),
         );

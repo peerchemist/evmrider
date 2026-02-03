@@ -26,13 +26,16 @@ class EthereumConfigAdapter extends TypeAdapter<EthereumConfig> {
       lastBlock: (fields[6] as num?)?.toInt(),
       pollIntervalSeconds: fields[7] == null ? 5 : (fields[7] as num).toInt(),
       notificationsEnabled: fields[8] == null ? true : fields[8] as bool,
+      blockExplorerUrl: fields[9] == null
+          ? 'https://etherscan.io'
+          : fields[9] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, EthereumConfig obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.rpcEndpoint)
       ..writeByte(1)
@@ -50,7 +53,9 @@ class EthereumConfigAdapter extends TypeAdapter<EthereumConfig> {
       ..writeByte(7)
       ..write(obj.pollIntervalSeconds)
       ..writeByte(8)
-      ..write(obj.notificationsEnabled);
+      ..write(obj.notificationsEnabled)
+      ..writeByte(9)
+      ..write(obj.blockExplorerUrl);
   }
 
   @override
