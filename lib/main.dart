@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/screens/eventlistenerscreen.dart';
 import 'package:evmrider/screens/setup.dart';
 import 'package:evmrider/services/background_polling.dart';
 import 'package:evmrider/utils/hive_init.dart';
+import 'package:http/http.dart' as http;
+import 'package:web3dart/web3dart.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -120,11 +123,76 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Future<void> _loadShowcaseConfig() async {
+    final contents = await rootBundle.loadString(
+      'assets/configs/showcase_uniswap_v2_usdc_weth.yaml',
+    );
+    final config = EthereumConfig.fromYaml(contents);
+    if (config == null) {
+      throw Exception('Invalid showcase configuration.');
+    }
+
+    final seededConfig = await _seedShowcaseConfig(config);
+    await seededConfig.save();
+    if (!mounted) return;
+    _onConfigUpdated(seededConfig);
+  }
+
+  Future<EthereumConfig> _seedShowcaseConfig(EthereumConfig config) async {
+    try {
+      final rpcUrl = _appendApiKey(config.rpcEndpoint, config.apiKey);
+      final httpClient = http.Client();
+      final client = Web3Client(rpcUrl, httpClient);
+      try {
+        final latest = await client.getBlockNumber();
+        const seedOffset = 100;
+        final seededLastBlock =
+            latest > seedOffset ? latest - seedOffset : latest;
+        return EthereumConfig(
+          rpcEndpoint: config.rpcEndpoint,
+          apiKey: config.apiKey,
+          contractAddress: config.contractAddress,
+          contractAbi: config.contractAbi,
+          eventsToListen: config.eventsToListen,
+          startBlock: config.startBlock,
+          lastBlock: seededLastBlock,
+          pollIntervalSeconds: config.pollIntervalSeconds,
+          notificationsEnabled: config.notificationsEnabled,
+          blockExplorerUrl: config.blockExplorerUrl,
+        );
+      } finally {
+        client.dispose();
+        httpClient.close();
+      }
+    } catch (_) {
+      return config;
+    }
+  }
+
+  String _appendApiKey(String url, String? apiKey) {
+    if (apiKey == null || apiKey.isEmpty) return url;
+    try {
+      final uri = Uri.parse(url);
+      return uri
+          .replace(
+            queryParameters: <String, String>{
+              ...uri.queryParameters,
+              'apikey': apiKey,
+            },
+          )
+          .toString();
+    } catch (_) {
+      final sep = url.contains('?') ? '&' : '?';
+      return '$url${sep}apikey=${Uri.encodeQueryComponent(apiKey)}';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return EventListenerScreen(
       eventService: _eventService,
       onOpenSettings: _openSetup, // << gear-icon callback
+      onLoadShowcaseConfig: _loadShowcaseConfig,
     );
   }
 

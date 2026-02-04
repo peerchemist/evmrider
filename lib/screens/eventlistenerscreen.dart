@@ -14,15 +14,18 @@ import 'package:evmrider/utils/share_event.dart';
 import 'package:evmrider/utils/event_value_formatter.dart';
 import 'package:evmrider/widgets/event_data_display.dart';
 import 'package:evmrider/widgets/blockchain_link.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
   final VoidCallback? onOpenSettings;
+  final Future<void> Function()? onLoadShowcaseConfig;
 
   const EventListenerScreen({
     super.key,
     this.eventService,
     this.onOpenSettings,
+    this.onLoadShowcaseConfig,
   });
 
   @override
@@ -33,6 +36,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     with WidgetsBindingObserver {
   bool _isListening = false;
   bool _isRefreshing = false;
+  bool _isLoadingShowcase = false;
   static const int _maxEvents = 200;
   StreamSubscription<Event>? _eventSubscription;
   StreamSubscription<void>? _notificationTapSubscription;
@@ -86,6 +90,54 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     );
   }
 
+  Future<void> _loadShowcaseConfig() async {
+    final loader = widget.onLoadShowcaseConfig;
+    if (loader == null || _isLoadingShowcase) return;
+
+    setState(() => _isLoadingShowcase = true);
+    try {
+      await loader();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Showcase configuration loaded.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load showcase: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingShowcase = false);
+      }
+    }
+  }
+
+  Future<void> _openExternalLink(String url) async {
+    final uri = Uri.parse(url);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
+    }
+  }
+
+  Widget _buildExternalLink(String label, String url) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => _openExternalLink(url),
+      mouseCursor: SystemMouseCursors.click,
+      child: Text(
+        label,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.eventService == null) {
@@ -110,11 +162,64 @@ class _EventListenerScreenState extends State<EventListenerScreen>
                   ),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  'Setup steps:',
+                  style: Theme.of(context).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text(
+                      '1) Open Setup and enter the RPC endpoint, contract address, and ABI.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      children: [
+                        const Text('2) You can find RPC endpoints at '),
+                        _buildExternalLink(
+                          'chainlist.org',
+                          'https://chainlist.org',
+                        ),
+                        const Text(' (Ethereum Mainnet).'),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      children: [
+                        const Text('3) Copy the contract ABI from '),
+                        _buildExternalLink(
+                          'etherscan.io',
+                          'https://etherscan.io',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.settings),
                   label: const Text('Open setup'),
                   onPressed: _openSettings, // ← always works
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.auto_awesome),
+                  label: Text(
+                    _isLoadingShowcase
+                        ? 'Loading showcase…'
+                        : 'Load showcase config',
+                  ),
+                  onPressed:
+                      (widget.onLoadShowcaseConfig == null ||
+                          _isLoadingShowcase)
+                      ? null
+                      : _loadShowcaseConfig,
                 ),
               ],
             ),
