@@ -9,12 +9,13 @@ import 'package:evmrider/screens/aboutscreen.dart';
 import 'package:evmrider/services/notifications.dart';
 import 'package:evmrider/services/event_store.dart';
 import 'package:evmrider/screens/event_details_screen.dart';
+import 'package:evmrider/models/config.dart';
 import 'package:evmrider/utils/utils.dart';
 import 'package:evmrider/utils/share_event.dart';
 import 'package:evmrider/utils/event_value_formatter.dart';
 import 'package:evmrider/widgets/event_data_display.dart';
 import 'package:evmrider/widgets/blockchain_link.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:evmrider/widgets/external_link.dart';
 
 class EventListenerScreen extends StatefulWidget {
   final EthereumEventService? eventService;
@@ -37,12 +38,21 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   bool _isListening = false;
   bool _isRefreshing = false;
   bool _isLoadingShowcase = false;
+  String? _pendingNotificationPayload;
   static const int _maxEvents = 200;
   StreamSubscription<Event>? _eventSubscription;
   StreamSubscription<void>? _notificationTapSubscription;
   ValueListenable<Box>? _eventListenable;
   int _tokenDecimals = 18;
   static const String _appTitle = 'EVM Event Listener';
+  EthereumConfig? get _config => widget.eventService?.config;
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   void initState() {
@@ -64,6 +74,11 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       setState(() => _tokenDecimals = 18);
       _resolveTokenDecimals();
       unawaited(_loadStoredEvents());
+      final pending = _pendingNotificationPayload;
+      if (pending != null && widget.eventService != null) {
+        _pendingNotificationPayload = null;
+        unawaited(_openNotificationPayload(pending));
+      }
     }
   }
 
@@ -97,15 +112,9 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     setState(() => _isLoadingShowcase = true);
     try {
       await loader();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Showcase configuration loaded.')),
-      );
+      _showSnack('Showcase configuration loaded.');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load showcase: $e')));
+      _showSnack('Failed to load showcase: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoadingShowcase = false);
@@ -113,29 +122,33 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     }
   }
 
-  Future<void> _openExternalLink(String url) async {
-    final uri = Uri.parse(url);
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
-    }
-  }
+  Future<void> _openNotificationPayload(String? payload) async {
+    if (!mounted || payload == null) return;
 
-  Widget _buildExternalLink(String label, String url) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: () => _openExternalLink(url),
-      mouseCursor: SystemMouseCursors.click,
-      child: Text(
-        label,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.primary,
-          decoration: TextDecoration.underline,
-        ),
-      ),
+    final config = _config ?? await EthereumConfig.load();
+    if (config == null || !config.isValid()) {
+      _pendingNotificationPayload = payload;
+      return;
+    }
+
+    final event = await EventStore.findById(
+      payload,
+      preferredConfig: config,
+      limitPerKey: _maxEvents,
     );
+    if (event == null || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EventDetailsScreen(
+            event: event,
+            tokenDecimals: _tokenDecimals,
+            config: config,
+          ),
+        ),
+      );
+    });
   }
 
   @override
@@ -181,9 +194,9 @@ class _EventListenerScreenState extends State<EventListenerScreen>
                       alignment: WrapAlignment.center,
                       children: [
                         const Text('2) You can find RPC endpoints at '),
-                        _buildExternalLink(
-                          'chainlist.org',
-                          'https://chainlist.org',
+                        const ExternalLink(
+                          label: 'chainlist.org',
+                          url: 'https://chainlist.org',
                         ),
                         const Text(' (Ethereum Mainnet).'),
                       ],
@@ -193,9 +206,9 @@ class _EventListenerScreenState extends State<EventListenerScreen>
                       alignment: WrapAlignment.center,
                       children: [
                         const Text('3) Copy the contract ABI from '),
-                        _buildExternalLink(
-                          'etherscan.io',
-                          'https://etherscan.io',
+                        const ExternalLink(
+                          label: 'etherscan.io',
+                          url: 'https://etherscan.io',
                         ),
                       ],
                     ),
@@ -339,6 +352,71 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     );
   }
 
+  static int _compareEvents(Event a, Event b) {
+    final blockCompare = b.blockNumber.compareTo(a.blockNumber);
+    if (blockCompare != 0) return blockCompare;
+    final logCompare = b.logIndex.compareTo(a.logIndex);
+    if (logCompare != 0) return logCompare;
+    return b.transactionHash.compareTo(a.transactionHash);
+  }
+
+  Widget _buildEventTile(Event event) {
+    final tx = event.transactionHash;
+    final txPreview = tx.length <= 10 ? tx : '${tx.substring(0, 10)}…';
+    final card = Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ExpansionTile(
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                event.eventName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (!isMobilePlatform)
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Delete',
+                onPressed: () => _removeEvent(event),
+              ),
+          ],
+        ),
+        subtitle: Text('Block: ${event.blockNumber} | Tx: $txPreview'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildEventDetails(event),
+          ),
+        ],
+      ),
+    );
+    if (!isMobilePlatform) {
+      return GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onSecondaryTapUp: (details) =>
+            _showEventContextMenu(event, details.globalPosition),
+        child: card,
+      );
+    }
+    return Dismissible(
+      key: ValueKey(EventStore.eventId(event)),
+      direction: DismissDirection.startToEnd,
+      background: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.red[400],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      onDismissed: (_) => _removeEvent(event),
+      child: card,
+    );
+  }
+
   Widget _buildEventList() {
     if (_eventListenable == null) return _buildEmptyState();
 
@@ -347,23 +425,10 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       builder: (context, box, _) {
         final events = EventStore.loadSync(
           box,
-          widget.eventService?.config,
+          _config,
           limit: _maxEvents,
         );
-
-        // Update local cache for other operations if needed, or just use this list.
-        // We'll trust this list for rendering.
-        // Note: We might want to sort here if loadSync doesn't guarantee it,
-        // but loadSync calls _decodeEvents which just decodes.
-        // EventStore.addEvents sorts.
-        // Let's sort to be safe as per original _sortEvents logic.
-        events.sort((a, b) {
-          final blockCompare = b.blockNumber.compareTo(a.blockNumber);
-          if (blockCompare != 0) return blockCompare;
-          final logCompare = b.logIndex.compareTo(a.logIndex);
-          if (logCompare != 0) return logCompare;
-          return b.transactionHash.compareTo(a.transactionHash);
-        });
+        events.sort(_compareEvents);
 
         if (events.isEmpty) {
           return _buildRefreshableEmptyState();
@@ -373,61 +438,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           physics: const AlwaysScrollableScrollPhysics(),
           itemCount: events.length,
           itemBuilder: (context, index) {
-            final event = events[index];
-            final tx = event.transactionHash;
-            final txPreview = tx.length <= 10 ? tx : '${tx.substring(0, 10)}…';
-            final card = Card(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: ExpansionTile(
-                title: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        event.eventName,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    if (!isMobilePlatform)
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: 'Delete',
-                        onPressed: () => _removeEvent(event),
-                      ),
-                  ],
-                ),
-                subtitle: Text('Block: ${event.blockNumber} | Tx: $txPreview'),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildEventDetails(event),
-                  ),
-                ],
-              ),
-            );
-            if (!isMobilePlatform) {
-              return GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onSecondaryTapUp: (details) =>
-                    _showEventContextMenu(event, details.globalPosition),
-                child: card,
-              );
-            }
-            return Dismissible(
-              key: ValueKey(EventStore.eventId(event)),
-              direction: DismissDirection.startToEnd,
-              background: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.red[400],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: const Icon(Icons.delete, color: Colors.white),
-              ),
-              onDismissed: (_) => _removeEvent(event),
-              child: card,
-            );
+            return _buildEventTile(events[index]);
           },
         );
       },
@@ -436,7 +447,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
 
   Widget _buildEventDetails(Event event) {
     final blockExplorerUrl =
-        widget.eventService?.config.blockExplorerUrl ?? 'https://etherscan.io';
+        _config?.blockExplorerUrl ?? 'https://etherscan.io';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -511,7 +522,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   }
 
   Future<void> _loadStoredEvents() async {
-    final config = widget.eventService?.config;
+    final config = _config;
     if (config == null) {
       if (!mounted) return;
       setState(() {
@@ -520,20 +531,12 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       return;
     }
 
-    // Force reload from disk to catch background updates
     await EventStore.closeBox();
     final listenable = await EventStore.getValueListenable(config);
     if (!mounted) return;
     setState(() {
       _eventListenable = listenable;
     });
-    // Trigger initial load via listener or just let builder handle it?
-    // We still need _events for other methods like _handleNotificationTap to verify existence if we want.
-    // But if we switch to builder, _events might be stale if we don't update it.
-    // Let's defer _events population to the builder or keep it for now?
-    // If I use builder, I don't need to manually populate _events here for display.
-    // user wants: "list of events get re-read" "every time app is opened"
-    // The builder will do that.
   }
 
   Future<void> _refreshEvents() async {
@@ -543,17 +546,18 @@ class _EventListenerScreenState extends State<EventListenerScreen>
 
     setState(() => _isRefreshing = true);
     try {
+      final config = service.config;
       final events = await service.pollOnce();
       if (events.isNotEmpty) {
         final existingEvents = await EventStore.load(
-          service.config,
+          config,
           limit: _maxEvents,
         );
         final existingIds = existingEvents.map(EventStore.eventId).toSet();
         final freshEvents = events
             .where((event) => !existingIds.contains(EventStore.eventId(event)))
             .toList();
-        if ((service.config.notificationsEnabled) && freshEvents.isNotEmpty) {
+        if (config.notificationsEnabled && freshEvents.isNotEmpty) {
           for (final event in freshEvents) {
             unawaited(
               NotificationService.instance.notifyEvent(event, silent: true),
@@ -561,7 +565,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           }
         }
         await EventStore.addEvents(
-          service.config,
+          config,
           events,
           maxEvents: _maxEvents,
         );
@@ -569,10 +573,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         // No need to manually merge, listener handles it
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+      _showSnack('Refresh failed: $e');
     } finally {
       if (mounted) {
         setState(() => _isRefreshing = false);
@@ -584,21 +585,22 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       _isListening ? _stopListening() : _startListening();
 
   Future<void> _startListening() async {
-    if (widget.eventService == null) return;
+    final service = widget.eventService;
+    if (service == null) return;
     if (_isListening) return;
 
     try {
       await NotificationService.instance.requestPermissionsIfNeeded();
       await _eventSubscription?.cancel();
-      _eventSubscription = widget.eventService!.listen().listen(
+      _eventSubscription = service.listen().listen(
         (event) {
           if (!mounted) return;
-          if (widget.eventService?.config.notificationsEnabled ?? true) {
+          if (service.config.notificationsEnabled) {
             unawaited(NotificationService.instance.notifyEvent(event));
           }
           unawaited(
             EventStore.addEvent(
-              widget.eventService?.config,
+              service.config,
               event,
               maxEvents: _maxEvents,
             ),
@@ -607,19 +609,14 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         },
         onError: (Object error, StackTrace st) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error listening to events: $error')),
-          );
+          _showSnack('Error listening to events: $error');
           unawaited(_stopListening());
         },
       );
       if (!mounted) return;
       setState(() => _isListening = true);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to start listening: $e')));
+      _showSnack('Failed to start listening: $e');
     }
   }
 
@@ -634,12 +631,12 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   }
 
   void _clearEvents() {
-    unawaited(EventStore.clear(widget.eventService?.config));
+    unawaited(EventStore.clear(_config));
     // No need to clear local list manually
   }
 
   void _removeEvent(Event event) {
-    unawaited(EventStore.removeEvent(widget.eventService?.config, event));
+    unawaited(EventStore.removeEvent(_config, event));
     // No need to remove from local list manually
   }
 
@@ -667,32 +664,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   }
 
   void _handleNotificationTap(String? payload) {
-    unawaited(
-      _loadStoredEvents().then((_) async {
-        if (!mounted || payload == null) return;
-
-        try {
-          final config = widget.eventService?.config;
-          final events = await EventStore.load(config, limit: _maxEvents);
-          final event = events.firstWhere(
-            (e) => EventStore.eventId(e) == payload,
-          );
-          if (!mounted) return;
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => EventDetailsScreen(
-                event: event,
-                tokenDecimals: _tokenDecimals,
-                config: config,
-              ),
-            ),
-          );
-        } catch (e) {
-          // Event not found, possibly cleared or limit reached.
-          // Just staying on the list is fine, user will see the latest state.
-        }
-      }),
-    );
+    unawaited(_openNotificationPayload(payload));
   }
 
   @override

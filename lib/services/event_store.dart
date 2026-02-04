@@ -124,6 +124,36 @@ class EventStore {
   static String eventId(Event event) =>
       '${event.eventName}|${event.blockNumber}|${event.transactionHash}|${event.logIndex}';
 
+  static Future<Event?> findById(
+    String id, {
+    EthereumConfig? preferredConfig,
+    int limitPerKey = 200,
+  }) async {
+    final box = await Hive.openBox(_boxName);
+    final preferredKey =
+        preferredConfig == null ? null : _keyForConfig(preferredConfig);
+    final preferredEvent = _findInBox(box, id, preferredKey, limitPerKey);
+    if (preferredEvent != null) return preferredEvent;
+
+    for (final key in box.keys) {
+      if (key == preferredKey) continue;
+      final event = _findInBox(box, id, key, limitPerKey);
+      if (event != null) return event;
+    }
+    return null;
+  }
+
+  static Event? _findInBox(Box box, String id, dynamic key, int limit) {
+    if (key == null) return null;
+    final events = _decodeEvents(box.get(key));
+    final scanLimit = limit <= 0 ? events.length : limit;
+    for (var i = 0; i < events.length && i < scanLimit; i++) {
+      final event = events[i];
+      if (eventId(event) == id) return event;
+    }
+    return null;
+  }
+
   static List<Event> _decodeEvents(dynamic raw) {
     if (raw is! List) return <Event>[];
 
