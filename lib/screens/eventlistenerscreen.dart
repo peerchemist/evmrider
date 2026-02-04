@@ -245,12 +245,12 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           widget.eventService?.config,
           limit: _maxEvents,
         );
-        
+
         // Update local cache for other operations if needed, or just use this list.
         // We'll trust this list for rendering.
-        // Note: We might want to sort here if loadSync doesn't guarantee it, 
+        // Note: We might want to sort here if loadSync doesn't guarantee it,
         // but loadSync calls _decodeEvents which just decodes.
-        // EventStore.addEvents sorts. 
+        // EventStore.addEvents sorts.
         // Let's sort to be safe as per original _sortEvents logic.
         events.sort((a, b) {
           final blockCompare = b.blockNumber.compareTo(a.blockNumber);
@@ -370,7 +370,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           width: double.infinity,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(4),
           ),
           child: EventDataDisplay(
@@ -440,7 +440,10 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     try {
       final events = await service.pollOnce();
       if (events.isNotEmpty) {
-        final existingEvents = await EventStore.load(service.config, limit: _maxEvents);
+        final existingEvents = await EventStore.load(
+          service.config,
+          limit: _maxEvents,
+        );
         final existingIds = existingEvents.map(EventStore.eventId).toSet();
         final freshEvents = events
             .where((event) => !existingIds.contains(EventStore.eventId(event)))
@@ -550,41 +553,41 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     }
   }
 
-
-
-
   Future<void> _checkInitialNotification() async {
-    final payload = await NotificationService.instance.getInitialNotificationPayload();
+    final payload = await NotificationService.instance
+        .getInitialNotificationPayload();
     if (payload != null) {
       _handleNotificationTap(payload);
     }
   }
 
   void _handleNotificationTap(String? payload) {
-    unawaited(_loadStoredEvents().then((_) async {
-      if (!mounted || payload == null) return;
-      
-      try {
-        final config = widget.eventService?.config;
-        final events = await EventStore.load(config, limit: _maxEvents);
-        final event = events.firstWhere(
-          (e) => EventStore.eventId(e) == payload,
-        );
-        if (!mounted) return;
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => EventDetailsScreen(
-              event: event,
-              tokenDecimals: _tokenDecimals,
-              config: config,
+    unawaited(
+      _loadStoredEvents().then((_) async {
+        if (!mounted || payload == null) return;
+
+        try {
+          final config = widget.eventService?.config;
+          final events = await EventStore.load(config, limit: _maxEvents);
+          final event = events.firstWhere(
+            (e) => EventStore.eventId(e) == payload,
+          );
+          if (!mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => EventDetailsScreen(
+                event: event,
+                tokenDecimals: _tokenDecimals,
+                config: config,
+              ),
             ),
-          ),
-        );
-      } catch (e) {
-        // Event not found, possibly cleared or limit reached.
-        // Just staying on the list is fine, user will see the latest state.
-      }
-    }));
+          );
+        } catch (e) {
+          // Event not found, possibly cleared or limit reached.
+          // Just staying on the list is fine, user will see the latest state.
+        }
+      }),
+    );
   }
 
   @override
