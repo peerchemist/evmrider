@@ -12,6 +12,7 @@ import 'package:web3dart/web3dart.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await initHiveForApp();
 
   await BackgroundPollingService.initialize();

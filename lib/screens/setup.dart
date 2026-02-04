@@ -105,265 +105,268 @@ class _SetupScreenState extends State<SetupScreen> {
         title: Text('Setup'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Padding(
-        padding: EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'RPC Configuration',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _rpcController,
-                        decoration: InputDecoration(
-                          labelText: 'RPC Endpoint *',
-                          hintText: 'https://eth.llamarpc.com',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter RPC endpoint';
-                          }
-                          final uri = Uri.tryParse(value.trim());
-                          if (uri == null || !uri.isAbsolute) {
-                            return 'Please enter a valid URL';
-                          }
-                          if (uri.scheme != 'http' && uri.scheme != 'https') {
-                            return 'RPC endpoint must start with http:// or https://';
-                          }
-                          return null;
-                        },
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _apiKeyController,
-                        decoration: InputDecoration(
-                          labelText: 'API Key (Optional)',
-                          hintText: 'Enter if required by your RPC provider',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _startBlockController,
-                        keyboardType: TextInputType
-                            .number, // ← here (not inside decoration)
-                        decoration: const InputDecoration(
-                          labelText: 'Start block (optional)',
-                          hintText: 'e.g. 19000000',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return null; // optional
-                          }
-                          final n = int.tryParse(value.trim());
-                          if (n == null || n < 0) {
-                            return 'Enter a valid block number';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _blockExplorerController,
-                        decoration: const InputDecoration(
-                          labelText: 'Block Explorer URL',
-                          hintText: 'https://etherscan.io',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter a block explorer URL';
-                          }
-                          final uri = Uri.tryParse(value.trim());
-                          if (uri == null || !uri.isAbsolute) {
-                            return 'Please enter a valid URL';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Poll Interval *',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Slider(
-                        value: _pollSecondsToSliderValue(_pollIntervalSeconds),
-                        min: 0,
-                        max: 1,
-                        divisions: 100,
-                        label: _formatDurationLabel(_pollIntervalSeconds),
-                        onChanged: (value) {
-                          setState(() {
-                            _pollIntervalSeconds =
-                                _sliderValueToPollSeconds(value);
-                          });
-                        },
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(_formatDurationLabel(_minPollSeconds)),
-                          Text(_formatDurationLabel(_maxPollSeconds)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Selected: ${_formatDurationLabel(_pollIntervalSeconds)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Contract Configuration',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _contractController,
-                        decoration: InputDecoration(
-                          labelText: 'Contract Address *',
-                          hintText: '0x...',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter contract address';
-                          }
-                          if (!_ethAddressPattern.hasMatch(value.trim())) {
-                            return 'Please enter a valid Ethereum address';
-                          }
-                          return null;
-                        },
-                      ),
-                      SizedBox(height: 16),
-                      TextFormField(
-                        controller: _abiController,
-                        decoration: InputDecoration(
-                          labelText: 'Contract ABI (JSON) *',
-                          hintText:
-                              'Paste the complete ABI JSON from Etherscan',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 8,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter contract ABI';
-                          }
-                          try {
-                            jsonDecode(value.trim());
-                            return null;
-                          } catch (e) {
-                            return 'Please enter valid JSON';
-                          }
-                        },
-                        onChanged: (_) {
-                          _abiParseDebounce?.cancel();
-                          _abiParseDebounce = Timer(
-                            const Duration(milliseconds: 400),
-                            _parseAbiForEvents,
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Events to Listen',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      SizedBox(height: 16),
-                      if (_availableEvents.isNotEmpty)
-                        ...(_availableEvents
-                            .map(
-                              (event) => CheckboxListTile(
-                                title: Text(event),
-                                value: _events.contains(event),
-                                onChanged: (bool? value) {
-                                  setState(() {
-                                    if (value == true) {
-                                      _events.add(event);
-                                    } else {
-                                      _events.remove(event);
-                                    }
-                                  });
-                                },
-                              ),
-                            )
-                            .toList())
-                      else
+      body: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              children: [
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Parse ABI first to see available events',
-                          style: TextStyle(color: Colors.grey[600]),
+                          'RPC Configuration',
+                          style: Theme.of(context).textTheme.headlineSmall,
                         ),
-                    ],
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _rpcController,
+                          decoration: InputDecoration(
+                            labelText: 'RPC Endpoint *',
+                            hintText: 'https://eth.llamarpc.com',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter RPC endpoint';
+                            }
+                            final uri = Uri.tryParse(value.trim());
+                            if (uri == null || !uri.isAbsolute) {
+                              return 'Please enter a valid URL';
+                            }
+                            if (uri.scheme != 'http' && uri.scheme != 'https') {
+                              return 'RPC endpoint must start with http:// or https://';
+                            }
+                            return null;
+                          },
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _apiKeyController,
+                          decoration: InputDecoration(
+                            labelText: 'API Key (Optional)',
+                            hintText: 'Enter if required by your RPC provider',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _startBlockController,
+                          keyboardType: TextInputType
+                              .number, // ← here (not inside decoration)
+                          decoration: const InputDecoration(
+                            labelText: 'Start block (optional)',
+                            hintText: 'e.g. 19000000',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return null; // optional
+                            }
+                            final n = int.tryParse(value.trim());
+                            if (n == null || n < 0) {
+                              return 'Enter a valid block number';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _blockExplorerController,
+                          decoration: const InputDecoration(
+                            labelText: 'Block Explorer URL',
+                            hintText: 'https://etherscan.io',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter a block explorer URL';
+                            }
+                            final uri = Uri.tryParse(value.trim());
+                            if (uri == null || !uri.isAbsolute) {
+                              return 'Please enter a valid URL';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Poll Interval *',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Slider(
+                          value: _pollSecondsToSliderValue(_pollIntervalSeconds),
+                          min: 0,
+                          max: 1,
+                          divisions: 100,
+                          label: _formatDurationLabel(_pollIntervalSeconds),
+                          onChanged: (value) {
+                            setState(() {
+                              _pollIntervalSeconds =
+                                  _sliderValueToPollSeconds(value);
+                            });
+                          },
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(_formatDurationLabel(_minPollSeconds)),
+                            Text(_formatDurationLabel(_maxPollSeconds)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Selected: ${_formatDurationLabel(_pollIntervalSeconds)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(height: 24),
-              SwitchListTile.adaptive(
-                title: const Text('Enable notifications'),
-                subtitle: const Text(
-                  'Show a system notification when a subscribed event fires.',
+                SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Contract Configuration',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _contractController,
+                          decoration: InputDecoration(
+                            labelText: 'Contract Address *',
+                            hintText: '0x...',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter contract address';
+                            }
+                            if (!_ethAddressPattern.hasMatch(value.trim())) {
+                              return 'Please enter a valid Ethereum address';
+                            }
+                            return null;
+                          },
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _abiController,
+                          decoration: InputDecoration(
+                            labelText: 'Contract ABI (JSON) *',
+                            hintText:
+                                'Paste the complete ABI JSON from Etherscan',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 8,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter contract ABI';
+                            }
+                            try {
+                              jsonDecode(value.trim());
+                              return null;
+                            } catch (e) {
+                              return 'Please enter valid JSON';
+                            }
+                          },
+                          onChanged: (_) {
+                            _abiParseDebounce?.cancel();
+                            _abiParseDebounce = Timer(
+                              const Duration(milliseconds: 400),
+                              _parseAbiForEvents,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                value: _notificationsEnabled,
-                onChanged: _toggleNotifications,
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: _isSaving ? null : _saveConfig,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Events to Listen',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        SizedBox(height: 16),
+                        if (_availableEvents.isNotEmpty)
+                          ...(_availableEvents
+                              .map(
+                                (event) => CheckboxListTile(
+                                  title: Text(event),
+                                  value: _events.contains(event),
+                                  onChanged: (bool? value) {
+                                    setState(() {
+                                      if (value == true) {
+                                        _events.add(event);
+                                      } else {
+                                        _events.remove(event);
+                                      }
+                                    });
+                                  },
+                                ),
+                              )
+                              .toList())
+                        else
+                          Text(
+                            'Parse ABI first to see available events',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: Text(_isSaving ? 'Saving…' : 'Save Configuration'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _exportConfig,
-                icon: const Icon(Icons.download),
-                label: const Text('Export Configuration (YAML)'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                SizedBox(height: 24),
+                SwitchListTile.adaptive(
+                  title: const Text('Enable notifications'),
+                  subtitle: const Text(
+                    'Show a system notification when a subscribed event fires.',
+                  ),
+                  value: _notificationsEnabled,
+                  onChanged: _toggleNotifications,
                 ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _importConfig,
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Import Configuration (YAML)'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _isSaving ? null : _saveConfig,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: Text(_isSaving ? 'Saving…' : 'Save Configuration'),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _exportConfig,
+                  icon: const Icon(Icons.download),
+                  label: const Text('Export Configuration (YAML)'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _importConfig,
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text('Import Configuration (YAML)'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

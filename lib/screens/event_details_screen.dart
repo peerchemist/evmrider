@@ -33,47 +33,50 @@ class EventDetailsScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Transaction Hash:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            TransactionLink(
-              txHash: event.transactionHash,
-              blockExplorerUrl: _blockExplorerUrl,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Block Number:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            BlockLink(
-              blockNumber: event.blockNumber,
-              blockExplorerUrl: _blockExplorerUrl,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Event Data:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(4),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Transaction Hash:',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              child: EventDataDisplay(
-                data: event.data,
-                tokenDecimals: tokenDecimals,
+              TransactionLink(
+                txHash: event.transactionHash,
+                blockExplorerUrl: _blockExplorerUrl,
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              const Text(
+                'Block Number:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              BlockLink(
+                blockNumber: event.blockNumber,
+                blockExplorerUrl: _blockExplorerUrl,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Event Data:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: EventDataDisplay(
+                  data: event.data,
+                  tokenDecimals: tokenDecimals,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

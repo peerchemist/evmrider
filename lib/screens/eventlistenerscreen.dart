@@ -156,85 +156,88 @@ class _EventListenerScreenState extends State<EventListenerScreen>
     if (widget.eventService == null) {
       return Scaffold(
         appBar: AppBar(title: _buildScrollableTitle(_appTitle)),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  size: 72,
-                  color: Colors.orange,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Please configure your settings first',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.orange[800],
+        body: SafeArea(
+          top: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 72,
+                    color: Colors.orange,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Setup steps:',
-                  style: Theme.of(context).textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text(
-                      '1) Open Setup and enter the RPC endpoint, contract address, and ABI.',
-                      textAlign: TextAlign.center,
+                  const SizedBox(height: 16),
+                  Text(
+                    'Please configure your settings first',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.orange[800],
                     ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      children: [
-                        const Text('2) You can find RPC endpoints at '),
-                        const ExternalLink(
-                          label: 'chainlist.org',
-                          url: 'https://chainlist.org',
-                        ),
-                        const Text(' (Ethereum Mainnet).'),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      children: [
-                        const Text('3) Copy the contract ABI from '),
-                        const ExternalLink(
-                          label: 'etherscan.io',
-                          url: 'https://etherscan.io',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.settings),
-                  label: const Text('Open setup'),
-                  onPressed: _openSettings, // ← always works
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.auto_awesome),
-                  label: Text(
-                    _isLoadingShowcase
-                        ? 'Loading showcase…'
-                        : 'Load showcase config',
+                    textAlign: TextAlign.center,
                   ),
-                  onPressed:
-                      (widget.onLoadShowcaseConfig == null ||
-                          _isLoadingShowcase)
-                      ? null
-                      : _loadShowcaseConfig,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'Setup steps:',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text(
+                        '1) Open Setup and enter the RPC endpoint, contract address, and ABI.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        children: [
+                          const Text('2) You can find RPC endpoints at '),
+                          const ExternalLink(
+                            label: 'chainlist.org',
+                            url: 'https://chainlist.org',
+                          ),
+                          const Text(' (Ethereum Mainnet).'),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        children: [
+                          const Text('3) Copy the contract ABI from '),
+                          const ExternalLink(
+                            label: 'etherscan.io',
+                            url: 'https://etherscan.io',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.settings),
+                    label: const Text('Open setup'),
+                    onPressed: _openSettings, // ← always works
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.auto_awesome),
+                    label: Text(
+                      _isLoadingShowcase
+                          ? 'Loading showcase…'
+                          : 'Load showcase config',
+                    ),
+                    onPressed:
+                        (widget.onLoadShowcaseConfig == null ||
+                            _isLoadingShowcase)
+                        ? null
+                        : _loadShowcaseConfig,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -271,41 +274,44 @@ class _EventListenerScreenState extends State<EventListenerScreen>
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // status / polling-interval bar
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: _isListening ? Colors.green[100] : Colors.grey[100],
-            child: Row(
-              children: [
-                Icon(
-                  _isListening
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  color: _isListening ? Colors.green : Colors.grey,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _isListening ? 'Listening for events…' : 'Not listening',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: _isListening ? Colors.green[800] : Colors.grey[800],
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            // status / polling-interval bar
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: _isListening ? Colors.green[100] : Colors.grey[100],
+              child: Row(
+                children: [
+                  Icon(
+                    _isListening
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: _isListening ? Colors.green : Colors.grey,
                   ),
-                ),
-                const Spacer(),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    _isListening ? 'Listening for events…' : 'Not listening',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _isListening ? Colors.green[800] : Colors.grey[800],
+                    ),
+                  ),
+                  const Spacer(),
+                ],
+              ),
             ),
-          ),
-          // event list
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refreshEvents,
-              child: _buildEventList(),
+            // event list
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refreshEvents,
+                child: _buildEventList(),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
