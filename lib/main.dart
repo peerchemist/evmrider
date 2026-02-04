@@ -16,14 +16,52 @@ void main() async {
   runApp(EthereumEventListenerApp());
 }
 
-class EthereumEventListenerApp extends StatelessWidget {
+class EthereumEventListenerApp extends StatefulWidget {
   const EthereumEventListenerApp({super.key});
+
+  @override
+  State<EthereumEventListenerApp> createState() =>
+      _EthereumEventListenerAppState();
+}
+
+class _EthereumEventListenerAppState extends State<EthereumEventListenerApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveInitialTheme();
+  }
+
+  void _resolveInitialTheme() {
+    final brightness = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .platformBrightness;
+    _themeMode = brightness == Brightness.dark
+        ? ThemeMode.dark
+        : ThemeMode.light;
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Ethereum Event Listener',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFD0BCFF),
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+      ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFD0BCFF),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      themeMode: _themeMode,
       home: MainScreen(),
     );
   }
