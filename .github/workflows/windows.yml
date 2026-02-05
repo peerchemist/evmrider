@@ -2,6 +2,8 @@ name: Build Windows (x64)
 
 on:
   push:
+    tags:
+      - "*"
   workflow_dispatch:
 
 permissions:
