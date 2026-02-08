@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web3dart/web3dart.dart';
 import 'package:wallet/wallet.dart' show EthereumAddress;
@@ -107,7 +108,7 @@ class EthereumEventService {
       fromBlock = 0;
     }
 
-    final latest = await _client.getBlockNumber();
+    final latest = await _withRetry(() => _client.getBlockNumber());
     if (latest < fromBlock) return const <Event>[];
 
     final out = <Event>[];
@@ -129,13 +130,16 @@ class EthereumEventService {
         for (final fe in logs) {
           out.add(_decode(name, contractEvent, paramNames, fe));
         }
-      } catch (_) {
+      } catch (e) {
+        debugPrint('EthereumEventService.pollOnce: Error polling $name: $e');
         hadError = true;
       }
     }
 
     if (!hadError) {
       await _maybeSaveLastBlock(latest);
+    } else {
+      throw Exception('One or more events failed to poll.');
     }
 
     return out;
@@ -230,20 +234,16 @@ class EthereumEventService {
     _timers.add(timer);
   }
 
-  /// Retries getLogs on SocketException or generic ClientException
-  Future<List<FilterEvent>> _getLogsWithRetry(
-    FilterOptions options, {
-    int maxRetries = 5,
-  }) async {
+  /// General retry wrapper for RPC calls
+  Future<T> _withRetry<T>(Future<T> Function() fn, {int maxRetries = 3}) async {
     var attempt = 0;
     while (true) {
       try {
-        return await _client.getLogs(options);
+        return await fn();
       } catch (e) {
         attempt++;
         if (attempt > maxRetries) rethrow;
 
-        // Check for specific transient errors
         final s = e.toString().toLowerCase();
         final isNetwork =
             s.contains('socketexception') ||
@@ -254,11 +254,18 @@ class EthereumEventService {
 
         if (!isNetwork) rethrow;
 
-        // Exponential backoff
         final delay = Duration(seconds: (1 << (attempt - 1)));
         await Future.delayed(delay);
       }
     }
+  }
+
+  /// Retries getLogs on SocketException or generic ClientException
+  Future<List<FilterEvent>> _getLogsWithRetry(
+    FilterOptions options, {
+    int maxRetries = 5,
+  }) async {
+    return _withRetry(() => _client.getLogs(options), maxRetries: maxRetries);
   }
 
   // ───────────────────────────────────────── decode ──
@@ -350,10 +357,12 @@ class EthereumEventService {
 
     try {
       final function = _contract.function('decimals');
-      final result = await _client.call(
-        contract: _contract,
-        function: function,
-        params: const [],
+      final result = await _withRetry(
+        () => _client.call(
+          contract: _contract,
+          function: function,
+          params: const [],
+        ),
       );
       if (result.isNotEmpty) {
         final value = result.first;
