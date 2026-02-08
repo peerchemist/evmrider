@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/models/event.dart';
+import 'package:evmrider/models/app_state.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'package:evmrider/services/event_store.dart';
 import 'package:evmrider/services/notifications.dart';
@@ -81,12 +82,14 @@ Future<bool> _runBackgroundPoll() async {
     return true;
   }
 
-  // ─────────────────────────────── Load config ──────────────────────────────
+  // ─────────────────────────────── Load config & state ──────────────────────
   EthereumConfig? config;
+  AppState? state;
   try {
     config = await EthereumConfig.load();
+    state = await AppState.load();
   } catch (e) {
-    debugPrint('Background poll: Config load failed: $e');
+    debugPrint('Background poll: Config/State load failed: $e');
     return true;
   }
 
@@ -102,9 +105,34 @@ Future<bool> _runBackgroundPoll() async {
   try {
     service = EthereumEventService(config);
     events = await service.pollOnce();
+
+    // Success! Reset failure count.
+    if (state.backgroundPollFailures != 0) {
+      state.backgroundPollFailures = 0;
+      await state.save();
+    }
   } catch (e) {
     debugPrint('Background poll: Event polling failed: $e');
     service?.dispose();
+
+    // Increment failure count and notify if needed
+    final currentFailures = (state.backgroundPollFailures ?? 0) + 1;
+    state.backgroundPollFailures = currentFailures;
+    await state.save();
+
+    if (currentFailures >= 3) {
+      try {
+        await NotificationService.instance.notifySimple(
+          title: 'Background Polling Issue',
+          body:
+              'Background polling has failed $currentFailures times in a row. '
+              'Please check your network connection or RPC settings.',
+        );
+      } catch (ne) {
+        debugPrint('Background poll: Failed to notify error: $ne');
+      }
+    }
+
     return true;
   }
 

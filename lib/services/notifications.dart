@@ -112,6 +112,37 @@ class NotificationService {
     }
   }
 
+  Future<void> notifySimple({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    if (kIsWeb) return;
+    await ensureInitialized();
+
+    final id = _nextId++;
+
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      payload: payload,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _androidChannelId,
+          _androidChannelName,
+          channelDescription: _androidChannelDescription,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: const DarwinNotificationDetails(),
+        macOS: const DarwinNotificationDetails(),
+        linux: const LinuxNotificationDetails(),
+        windows: const WindowsNotificationDetails(),
+      ),
+    );
+  }
+
   Future<void> notifyEvent(Event event, {bool silent = false}) async {
     if (kIsWeb) return;
     await ensureInitialized();

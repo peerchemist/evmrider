@@ -7,8 +7,12 @@ class AppState extends HiveObject {
   @HiveField(0)
   int? lastProcessedBlock;
 
+  @HiveField(1)
+  int? backgroundPollFailures;
+
   AppState({
     this.lastProcessedBlock,
+    this.backgroundPollFailures,
   });
 
   static Future<AppState> load() async {

@@ -16,15 +16,20 @@ class AppStateAdapter extends TypeAdapter<AppState> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return AppState(lastProcessedBlock: (fields[0] as num?)?.toInt());
+    return AppState(
+      lastProcessedBlock: (fields[0] as num?)?.toInt(),
+      backgroundPollFailures: (fields[1] as num?)?.toInt(),
+    );
   }
 
   @override
   void write(BinaryWriter writer, AppState obj) {
     writer
-      ..writeByte(1)
+      ..writeByte(2)
       ..writeByte(0)
-      ..write(obj.lastProcessedBlock);
+      ..write(obj.lastProcessedBlock)
+      ..writeByte(1)
+      ..write(obj.backgroundPollFailures);
   }
 
   @override
