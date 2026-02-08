@@ -44,8 +44,11 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   StreamSubscription<void>? _notificationTapSubscription;
   ValueListenable<Box>? _eventListenable;
   int _tokenDecimals = 18;
-  static const String _appTitle = 'EVM Event Listener';
+  static const String _appTitle = 'EVM Log Listener';
   EthereumConfig? get _config => widget.eventService?.config;
+
+  late final ScrollController _titleScrollController;
+  Timer? _titleScrollTimer;
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -57,6 +60,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   @override
   void initState() {
     super.initState();
+    _titleScrollController = ScrollController();
     WidgetsBinding.instance.addObserver(this);
     unawaited(NotificationService.instance.ensureInitialized());
     _notificationTapSubscription = NotificationService
@@ -65,6 +69,37 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         .listen(_handleNotificationTap);
     _resolveTokenDecimals();
     unawaited(_loadStoredEvents().then((_) => _checkInitialNotification()));
+    
+    // Start animation after a short delay to allow for layout
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startTitleAnimation();
+    });
+  }
+
+  void _startTitleAnimation() {
+    _titleScrollTimer?.cancel();
+    _titleScrollTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      if (!mounted || !_titleScrollController.hasClients) return;
+      
+      final maxScroll = _titleScrollController.position.maxScrollExtent;
+      if (maxScroll <= 0) return;
+
+      await _titleScrollController.animateTo(
+        maxScroll,
+        duration: const Duration(seconds: 2),
+        curve: Curves.easeInOut,
+      );
+      
+      if (!mounted) return;
+      await Future.delayed(const Duration(seconds: 1));
+      
+      if (!mounted) return;
+      await _titleScrollController.animateTo(
+        0,
+        duration: const Duration(seconds: 2),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   @override
@@ -318,8 +353,14 @@ class _EventListenerScreenState extends State<EventListenerScreen>
 
   Widget _buildScrollableTitle(String text) {
     return SingleChildScrollView(
+      controller: _titleScrollController,
       scrollDirection: Axis.horizontal,
-      child: Text(text),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+        softWrap: false,
+        overflow: TextOverflow.visible,
+      ),
     );
   }
 
@@ -676,6 +717,8 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _titleScrollTimer?.cancel();
+    _titleScrollController.dispose();
     _notificationTapSubscription?.cancel();
     unawaited(_stopListening(updateState: false));
     super.dispose();
