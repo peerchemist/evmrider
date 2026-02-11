@@ -31,7 +31,10 @@ class BackgroundPollingService {
       existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
       backoffPolicy: BackoffPolicy.exponential,
       backoffPolicyDelay: const Duration(minutes: 1),
-      constraints: Constraints(networkType: NetworkType.connected),
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+        requiresBatteryNotLow: true,
+      ),
     );
   }
 
@@ -56,13 +59,13 @@ void callbackDispatcher() {
         _taskTimeout,
         onTimeout: () {
           debugPrint('Background poll timed out after $_taskTimeout');
-          return true;
+          return false;
         },
       );
     } catch (e, st) {
       // Top-level safety net — should never reach here but guarantees no crash
       debugPrint('Background poll fatal error: $e\n$st');
-      return true;
+      return false;
     }
   });
 }
@@ -75,14 +78,14 @@ Future<bool> _runBackgroundPoll() async {
     DartPluginRegistrant.ensureInitialized();
   } catch (e) {
     debugPrint('Background poll: Flutter binding init failed: $e');
-    return true;
+    return false;
   }
 
   try {
     await initHiveForApp();
   } catch (e) {
     debugPrint('Background poll: Hive init failed: $e');
-    return true;
+    return false;
   }
 
   // ─────────────────────────────── Load config & state ──────────────────────
@@ -93,7 +96,7 @@ Future<bool> _runBackgroundPoll() async {
     state = await AppState.load();
   } catch (e) {
     debugPrint('Background poll: Config/State load failed: $e');
-    return true;
+    return false;
   }
 
   if (config == null || !config.isValid()) {
@@ -136,7 +139,7 @@ Future<bool> _runBackgroundPoll() async {
       }
     }
 
-    return true;
+    return false;
   }
 
   if (events.isEmpty) {
