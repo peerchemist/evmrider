@@ -10,9 +10,13 @@ class AppState extends HiveObject {
   @HiveField(1)
   int? backgroundPollFailures;
 
+  @HiveField(2, defaultValue: false)
+  bool isListening;
+
   AppState({
     this.lastProcessedBlock,
     this.backgroundPollFailures,
+    this.isListening = false,
   });
 
   static Future<AppState> load() async {

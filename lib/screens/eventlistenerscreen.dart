@@ -4,6 +4,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:evmrider/services/eventlistener.dart';
 import 'dart:async';
 import 'package:evmrider/models/event.dart';
+import 'package:evmrider/models/app_state.dart';
 import 'package:evmrider/screens/setup.dart';
 import 'package:evmrider/screens/aboutscreen.dart';
 import 'package:evmrider/services/notifications.dart';
@@ -68,7 +69,10 @@ class _EventListenerScreenState extends State<EventListenerScreen>
         .onNotificationTap
         .listen(_handleNotificationTap);
     _resolveTokenDecimals();
-    unawaited(_loadStoredEvents().then((_) => _checkInitialNotification()));
+    unawaited(_loadStoredEvents().then((_) {
+      _checkInitialNotification();
+      _autoResumeListening();
+    }));
     
     // Start animation after a short delay to allow for layout
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -121,7 +125,19 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_loadStoredEvents());
+      _autoResumeListening();
     }
+  }
+
+  /// Auto-start the foreground listener if the persisted state says it was active.
+  void _autoResumeListening() {
+    if (_isListening || widget.eventService == null) return;
+    AppState.load().then((appState) {
+      if (!mounted) return;
+      if (appState.isListening) {
+        unawaited(_startListening());
+      }
+    });
   }
 
   void _openSettings() {
@@ -662,6 +678,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       );
       if (!mounted) return;
       setState(() => _isListening = true);
+      unawaited(_persistListeningState(true));
     } catch (e) {
       _showSnack('Failed to start listening: $e');
     }
@@ -674,6 +691,17 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       setState(() => _isListening = false);
     } else {
       _isListening = false;
+    }
+    unawaited(_persistListeningState(false));
+  }
+
+  Future<void> _persistListeningState(bool listening) async {
+    try {
+      final state = await AppState.load();
+      state.isListening = listening;
+      await state.save();
+    } catch (e) {
+      debugPrint('Failed to persist listening state: $e');
     }
   }
 

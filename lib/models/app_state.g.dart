@@ -19,17 +19,20 @@ class AppStateAdapter extends TypeAdapter<AppState> {
     return AppState(
       lastProcessedBlock: (fields[0] as num?)?.toInt(),
       backgroundPollFailures: (fields[1] as num?)?.toInt(),
+      isListening: fields[2] == null ? false : fields[2] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppState obj) {
     writer
-      ..writeByte(2)
+      ..writeByte(3)
       ..writeByte(0)
       ..write(obj.lastProcessedBlock)
       ..writeByte(1)
-      ..write(obj.backgroundPollFailures);
+      ..write(obj.backgroundPollFailures)
+      ..writeByte(2)
+      ..write(obj.isListening);
   }
 
   @override

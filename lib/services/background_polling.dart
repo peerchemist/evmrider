@@ -27,7 +27,10 @@ class BackgroundPollingService {
       kBackgroundPollTask,
       kBackgroundPollTask,
       frequency: Duration(seconds: normalized),
+      initialDelay: Duration.zero,
       existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+      backoffPolicy: BackoffPolicy.exponential,
+      backoffPolicyDelay: const Duration(minutes: 1),
       constraints: Constraints(networkType: NetworkType.connected),
     );
   }
