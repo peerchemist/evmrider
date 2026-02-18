@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:evmrider/models/event.dart';
 import 'package:evmrider/models/config.dart';
+import 'package:evmrider/services/eventlistener.dart';
 import 'package:evmrider/utils/share_event.dart';
 import 'package:evmrider/utils/event_value_formatter.dart';
 import 'package:evmrider/widgets/event_data_display.dart';
 import 'package:evmrider/widgets/blockchain_link.dart';
 
-class EventDetailsScreen extends StatelessWidget {
+class EventDetailsScreen extends StatefulWidget {
   final Event event;
   final int tokenDecimals;
   final EthereumConfig? config;
@@ -18,14 +19,45 @@ class EventDetailsScreen extends StatelessWidget {
     this.config,
   });
 
+  @override
+  State<EventDetailsScreen> createState() => _EventDetailsScreenState();
+}
+
+class _EventDetailsScreenState extends State<EventDetailsScreen> {
+  late int _resolvedTokenDecimals;
+
   String get _blockExplorerUrl =>
-      config?.blockExplorerUrl ?? 'https://etherscan.io';
+      widget.config?.blockExplorerUrl ?? 'https://etherscan.io';
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedTokenDecimals = widget.tokenDecimals;
+    _resolveTokenDecimalsFromConfig();
+  }
+
+  Future<void> _resolveTokenDecimalsFromConfig() async {
+    final config = widget.config;
+    if (config == null || !config.isValid()) return;
+
+    EthereumEventService? service;
+    try {
+      service = EthereumEventService(config);
+      final decimals = await service.getTokenDecimals();
+      if (!mounted) return;
+      setState(() => _resolvedTokenDecimals = decimals < 0 ? 0 : decimals);
+    } catch (_) {
+      // Keep the existing fallback when lookup fails.
+    } finally {
+      service?.dispose();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(event.eventName),
+        title: Text(widget.event.eventName),
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
@@ -45,7 +77,7 @@ class EventDetailsScreen extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               TransactionLink(
-                txHash: event.transactionHash,
+                txHash: widget.event.transactionHash,
                 blockExplorerUrl: _blockExplorerUrl,
               ),
               const SizedBox(height: 16),
@@ -54,7 +86,7 @@ class EventDetailsScreen extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               BlockLink(
-                blockNumber: event.blockNumber,
+                blockNumber: widget.event.blockNumber,
                 blockExplorerUrl: _blockExplorerUrl,
               ),
               const SizedBox(height: 16),
@@ -71,8 +103,8 @@ class EventDetailsScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: EventDataDisplay(
-                  data: event.data,
-                  tokenDecimals: tokenDecimals,
+                  data: widget.event.data,
+                  tokenDecimals: _resolvedTokenDecimals,
                 ),
               ),
             ],
@@ -84,9 +116,9 @@ class EventDetailsScreen extends StatelessWidget {
 
   Future<void> _shareEventData(BuildContext context) async {
     final text = formatEventDataForShare(
-      event.eventName,
-      event.data,
-      tokenDecimals: tokenDecimals,
+      widget.event.eventName,
+      widget.event.data,
+      tokenDecimals: _resolvedTokenDecimals,
     );
     await shareOrCopyText(
       context: context,
