@@ -561,7 +561,7 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   }
 
   Future<void> _shareEventData(Event event) async {
-    final text = event.toShareString();
+    final text = event.toShareString(tokenDecimals: _tokenDecimals);
     await shareOrCopyText(
       context: context,
       text: text,
