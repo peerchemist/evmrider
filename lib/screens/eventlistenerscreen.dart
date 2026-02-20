@@ -13,7 +13,6 @@ import 'package:evmrider/screens/event_details_screen.dart';
 import 'package:evmrider/models/config.dart';
 import 'package:evmrider/utils/utils.dart';
 import 'package:evmrider/utils/share_event.dart';
-import 'package:evmrider/utils/event_value_formatter.dart';
 import 'package:evmrider/widgets/event_data_display.dart';
 import 'package:evmrider/widgets/blockchain_link.dart';
 import 'package:evmrider/widgets/external_link.dart';
@@ -539,8 +538,8 @@ class _EventListenerScreenState extends State<EventListenerScreen>
             IconButton(
               icon: const Icon(Icons.share),
               tooltip: shouldCopyTextOnThisPlatform()
-                  ? 'Copy event data'
-                  : 'Share event data',
+                  ? 'Copy event payload'
+                  : 'Share event payload',
               onPressed: () => unawaited(_shareEventData(event)),
             ),
           ],
@@ -562,16 +561,12 @@ class _EventListenerScreenState extends State<EventListenerScreen>
   }
 
   Future<void> _shareEventData(Event event) async {
-    final text = formatEventDataForShare(
-      event.eventName,
-      event.data,
-      tokenDecimals: _tokenDecimals,
-    );
+    final text = event.toShareString();
     await shareOrCopyText(
       context: context,
       text: text,
-      subject: 'Event data',
-      copiedToast: 'Event data copied',
+      subject: 'Event payload',
+      copiedToast: 'Event payload copied',
     );
   }
 
