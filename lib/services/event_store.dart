@@ -190,6 +190,19 @@ class EventStore {
       logIndex = int.tryParse(rawLogIndex) ?? 0;
     }
 
+    var timestamp = 0;
+    final rawTimestamp = raw['timestamp'];
+    if (rawTimestamp is int) {
+      timestamp = rawTimestamp;
+    } else if (rawTimestamp is num) {
+      timestamp = rawTimestamp.toInt();
+    } else if (rawTimestamp is String) {
+      timestamp = int.tryParse(rawTimestamp) ?? 0;
+    }
+    if (timestamp <= 0) {
+      timestamp = DateTime.now().millisecondsSinceEpoch;
+    }
+
     final data = _normalizeMap(raw['data']);
 
     return Event(
@@ -197,6 +210,7 @@ class EventStore {
       transactionHash: txHash,
       blockNumber: blockNumber,
       logIndex: logIndex,
+      timestamp: timestamp,
       data: data,
     );
   }
@@ -207,6 +221,7 @@ class EventStore {
       'transactionHash': event.transactionHash,
       'blockNumber': event.blockNumber,
       'logIndex': event.logIndex,
+      'timestamp': event.timestamp,
       'data': _encodeValue(event.data),
     };
   }

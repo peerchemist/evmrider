@@ -300,6 +300,7 @@ class EthereumEventService {
       transactionHash: fe.transactionHash ?? 'unknown',
       blockNumber: _blockNumber(fe),
       logIndex: _logIndex(fe),
+      timestamp: _timestampMs(fe),
       data: data,
     );
   }
@@ -448,6 +449,34 @@ class EthereumEventService {
     }
 
     return 0;
+  }
+
+  int _timestampMs(FilterEvent fe) {
+    dynamic raw;
+
+    try {
+      raw = (fe as dynamic).timestamp;
+    } catch (_) {}
+
+    raw ??= DateTime.now().millisecondsSinceEpoch;
+
+    if (raw is DateTime) return raw.toUtc().millisecondsSinceEpoch;
+    if (raw is int) {
+      // Heuristic: values below 1e12 are probably unix seconds.
+      return raw < 1000000000000 ? raw * 1000 : raw;
+    }
+    if (raw is num) {
+      final value = raw.toInt();
+      return value < 1000000000000 ? value * 1000 : value;
+    }
+    if (raw is String) {
+      final parsed = int.tryParse(raw.trim());
+      if (parsed != null) {
+        return parsed < 1000000000000 ? parsed * 1000 : parsed;
+      }
+    }
+
+    return DateTime.now().millisecondsSinceEpoch;
   }
 
   void dispose() {

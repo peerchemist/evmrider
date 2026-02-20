@@ -6,6 +6,7 @@ class Event {
   final String transactionHash;
   final int blockNumber;
   final int logIndex;
+  final int timestamp;
   final Map<String, dynamic> data;
 
   Event({
@@ -13,6 +14,7 @@ class Event {
     required this.transactionHash,
     required this.blockNumber,
     required this.logIndex,
+    required this.timestamp,
     required this.data,
   });
 
@@ -22,6 +24,7 @@ class Event {
       'transactionHash': transactionHash,
       'blockNumber': blockNumber,
       'logIndex': logIndex,
+      'timestamp': timestamp,
       'data': _encodeValue(data),
     };
   }
@@ -36,6 +39,7 @@ class Event {
       'transactionHash: $transactionHash',
       'blockNumber: $blockNumber',
       'logIndex: $logIndex',
+      'timestamp: ${DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true).toIso8601String()}',
     ];
 
     if (data.isEmpty) {
