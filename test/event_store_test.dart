@@ -34,6 +34,7 @@ void main() {
       transactionHash: '0xabc',
       blockNumber: 100,
       logIndex: 0,
+      timestamp: 1700000000000,
       data: {'from': '0x1', 'to': '0x2', 'value': 100},
     );
 
@@ -65,6 +66,7 @@ void main() {
       transactionHash: '0xdef',
       blockNumber: 101,
       logIndex: 1,
+      timestamp: 1700000001000,
       data: {},
     );
 
