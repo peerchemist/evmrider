@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:evmrider/utils/event_value_formatter.dart';
+
 class Event {
   final String eventName;
   final String transactionHash;
@@ -34,6 +36,7 @@ class Event {
   }
 
   String toShareString({int tokenDecimals = 18}) {
+    final formatter = EventValueFormatter(tokenDecimals: tokenDecimals);
     final lines = <String>[
       'Event: $eventName',
       'transactionHash: $transactionHash',
@@ -52,11 +55,9 @@ class Event {
     for (final entry in entries) {
       final keyLower = entry.key.toLowerCase();
       final value = keyLower == 'from' || keyLower == 'to'
-          ? _stringifyRaw(entry.value)
-          : _stringifyValue(entry.value, tokenDecimals: tokenDecimals);
-      lines.add(
-        '${entry.key}: $value',
-      );
+          ? _stringifyRawValue(entry.value)
+          : _stringifyDataValue(entry.value, formatter);
+      lines.add('${entry.key}: $value');
     }
 
     return lines.join('\n');
@@ -78,30 +79,13 @@ class Event {
     return value.toString();
   }
 
-  static String _stringifyValue(dynamic value, {required int tokenDecimals}) {
+  static String _stringifyDataValue(
+    dynamic value,
+    EventValueFormatter formatter,
+  ) {
     if (value == null) return 'null';
-    if (value is bool) return value.toString();
-    if (value is String) {
-      final normalized = value.trim();
-      if (normalized.startsWith('0x') || normalized.startsWith('0X')) {
-        return normalized;
-      }
-      final parsed = _tryParseBigInt(normalized);
-      if (parsed != null) {
-        return _formatBigIntWithDecimals(parsed, tokenDecimals);
-      }
-      return value;
-    }
-    if (value is BigInt) {
-      return _formatBigIntWithDecimals(value, tokenDecimals);
-    }
-    if (value is int) {
-      return _formatBigIntWithDecimals(BigInt.from(value), tokenDecimals);
-    }
-    if (value is num) return value.toString();
-    if (value is Uint8List) return value.toList().toString();
     if (value is List) {
-      return '[${value.map((v) => _stringifyValue(v, tokenDecimals: tokenDecimals)).join(', ')}]';
+      return '[${value.map((v) => _stringifyDataValue(v, formatter)).join(', ')}]';
     }
     if (value is Map) {
       final entries = value.entries.toList()
@@ -109,70 +93,27 @@ class Event {
       final body = entries
           .map(
             (entry) =>
-                '${entry.key}: ${_stringifyValue(entry.value, tokenDecimals: tokenDecimals)}',
+                '${entry.key}: ${_stringifyDataValue(entry.value, formatter)}',
           )
           .join(', ');
       return '{$body}';
     }
-    return value.toString();
+    return formatter.format(value);
   }
 
-  static String _stringifyRaw(dynamic value) {
+  static String _stringifyRawValue(dynamic value) {
     if (value == null) return 'null';
-    if (value is Uint8List) return value.toList().toString();
     if (value is List) {
-      return '[${value.map(_stringifyRaw).join(', ')}]';
+      return '[${value.map(_stringifyRawValue).join(', ')}]';
     }
     if (value is Map) {
       final entries = value.entries.toList()
         ..sort((a, b) => a.key.toString().compareTo(b.key.toString()));
       final body = entries
-          .map((entry) => '${entry.key}: ${_stringifyRaw(entry.value)}')
+          .map((entry) => '${entry.key}: ${_stringifyRawValue(entry.value)}')
           .join(', ');
       return '{$body}';
     }
-    return value.toString();
-  }
-
-  static BigInt? _tryParseBigInt(String value) {
-    if (!RegExp(r'^-?\d+$').hasMatch(value)) return null;
-    return BigInt.tryParse(value);
-  }
-
-  static String _formatBigIntWithDecimals(BigInt value, int decimals) {
-    if (decimals <= 0) return value.toString();
-    final isNegative = value.isNegative;
-    final raw = value.abs().toString();
-
-    if (raw.length <= decimals) {
-      final padded = raw.padLeft(decimals + 1, '0');
-      final intPart = padded.substring(0, padded.length - decimals);
-      final fracPart = _trimTrailingZeros(
-        padded.substring(padded.length - decimals),
-      );
-      return _buildDecimalString(isNegative, intPart, fracPart);
-    }
-
-    final intPart = raw.substring(0, raw.length - decimals);
-    final fracPart = _trimTrailingZeros(raw.substring(raw.length - decimals));
-    return _buildDecimalString(isNegative, intPart, fracPart);
-  }
-
-  static String _buildDecimalString(
-    bool isNegative,
-    String intPart,
-    String fracPart,
-  ) {
-    final sign = isNegative ? '-' : '';
-    if (fracPart.isEmpty) return '$sign$intPart';
-    return '$sign$intPart.$fracPart';
-  }
-
-  static String _trimTrailingZeros(String value) {
-    var end = value.length;
-    while (end > 0 && value[end - 1] == '0') {
-      end--;
-    }
-    return value.substring(0, end);
+    return _encodeValue(value).toString();
   }
 }
