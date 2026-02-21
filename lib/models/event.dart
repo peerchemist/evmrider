@@ -50,8 +50,12 @@ class Event {
     final entries = data.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
     for (final entry in entries) {
+      final keyLower = entry.key.toLowerCase();
+      final value = keyLower == 'from' || keyLower == 'to'
+          ? _stringifyRaw(entry.value)
+          : _stringifyValue(entry.value, tokenDecimals: tokenDecimals);
       lines.add(
-        '${entry.key}: ${_stringifyValue(entry.value, tokenDecimals: tokenDecimals)}',
+        '${entry.key}: $value',
       );
     }
 
@@ -107,6 +111,23 @@ class Event {
             (entry) =>
                 '${entry.key}: ${_stringifyValue(entry.value, tokenDecimals: tokenDecimals)}',
           )
+          .join(', ');
+      return '{$body}';
+    }
+    return value.toString();
+  }
+
+  static String _stringifyRaw(dynamic value) {
+    if (value == null) return 'null';
+    if (value is Uint8List) return value.toList().toString();
+    if (value is List) {
+      return '[${value.map(_stringifyRaw).join(', ')}]';
+    }
+    if (value is Map) {
+      final entries = value.entries.toList()
+        ..sort((a, b) => a.key.toString().compareTo(b.key.toString()));
+      final body = entries
+          .map((entry) => '${entry.key}: ${_stringifyRaw(entry.value)}')
           .join(', ');
       return '{$body}';
     }

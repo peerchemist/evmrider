@@ -259,10 +259,15 @@ class EventStore {
       return out;
     }
 
+    final asString = value.toString();
+    if (!asString.startsWith('Instance of')) {
+      return asString;
+    }
+
     final hex = _tryHex(value);
     if (hex != null) return hex;
 
-    return value.toString();
+    return asString;
   }
 
   static String? _tryHex(dynamic value) {
