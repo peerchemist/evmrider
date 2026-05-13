@@ -112,6 +112,9 @@ class _EventListenerScreenState extends State<EventListenerScreen>
       setState(() => _tokenDecimals = 18);
       _resolveTokenDecimals();
       unawaited(_loadStoredEvents());
+      // Config/service can be attached asynchronously after a resume or cold launch.
+      // Re-check persisted listening state once the new service is available.
+      _autoResumeListening();
       final pending = _pendingNotificationPayload;
       if (pending != null && widget.eventService != null) {
         _pendingNotificationPayload = null;
