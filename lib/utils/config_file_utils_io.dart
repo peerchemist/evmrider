@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 
 Future<String?> pickYamlContent({String? dialogTitle}) async {
-  final result = await FilePicker.platform.pickFiles(
+  final result = await FilePicker.pickFiles(
     dialogTitle: dialogTitle,
     type: FileType.custom,
     allowedExtensions: ['yaml', 'yml'],
@@ -22,7 +22,7 @@ Future<String?> saveYamlFile(
   String? dialogTitle,
   required String fileName,
 }) async {
-  final outputFile = await FilePicker.platform.saveFile(
+  final outputFile = await FilePicker.saveFile(
     dialogTitle: dialogTitle,
     fileName: fileName,
     type: FileType.custom,

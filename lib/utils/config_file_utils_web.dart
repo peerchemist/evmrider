@@ -5,7 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:web/web.dart' as web;
 
 Future<String?> pickYamlContent({String? dialogTitle}) async {
-  final result = await FilePicker.platform.pickFiles(
+  final result = await FilePicker.pickFiles(
     dialogTitle: dialogTitle,
     type: FileType.custom,
     allowedExtensions: ['yaml', 'yml'],
