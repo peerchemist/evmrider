@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 
@@ -22,17 +24,16 @@ Future<String?> saveYamlFile(
   String? dialogTitle,
   required String fileName,
 }) async {
+  final yamlBytes = Uint8List.fromList(utf8.encode(yaml));
   final outputFile = await FilePicker.saveFile(
     dialogTitle: dialogTitle,
     fileName: fileName,
     type: FileType.custom,
     allowedExtensions: ['yaml', 'yml'],
+    bytes: yamlBytes,
   );
 
   if (outputFile == null) return null;
-
-  final file = File(outputFile);
-  await file.writeAsString(yaml);
 
   return outputFile;
 }
